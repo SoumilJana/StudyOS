@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
+import { useAuth } from '../context/AuthContext';
 import { storage } from '../services/storage';
 import { aiService } from '../services/aiService';
 import { Question, MistakeRecord } from '../types';
@@ -22,6 +23,7 @@ import { MarkdownRenderer } from '../components/MarkdownRenderer';
 
 export const ExamArenaView: React.FC = () => {
   const { questions, mistakes, subjects, weakTopics } = useStudyOS();
+  const { requireAuth } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'arena' | 'mistakes'>('arena');
   const [selectedMode, setSelectedMode] = useState<'topic' | 'mixed' | 'weak' | 'mock'>('mixed');
@@ -88,6 +90,7 @@ export const ExamArenaView: React.FC = () => {
   }, [isTestRunning, testCompleted, testQuestions, userAnswers, currentQuestionIdx]);
 
   const startPractice = (mode: 'topic' | 'mixed' | 'weak' | 'mock') => {
+    if (!requireAuth('start retrieval drills and save progress to the database')) return;
     let pool = [...questions];
     if (pool.length === 0) {
       alert('No practice questions available yet. Import your syllabus on the Command Center or generate questions in Learning Studio first!');

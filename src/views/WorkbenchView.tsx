@@ -16,11 +16,13 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
+import { useAuth } from '../context/AuthContext';
 import { storage } from '../services/storage';
 import { Task, Project, PriorityLevel, TaskStatus } from '../types';
 
 export const WorkbenchView: React.FC = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, requireAuth } = useAuth();
   const { projects, tasks, startTimer, subjects } = useStudyOS();
 
   const [activeTab, setActiveTab] = useState<'board' | 'list' | 'projects'>('board');
@@ -42,6 +44,7 @@ export const WorkbenchView: React.FC = () => {
 
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuth('create tasks in the database')) return;
     if (!taskTitle) return;
 
     const newTask: Task = {
@@ -67,6 +70,7 @@ export const WorkbenchView: React.FC = () => {
 
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuth('create projects in the database')) return;
     if (!projTitle) return;
 
     const newProject: Project = {
@@ -139,6 +143,7 @@ export const WorkbenchView: React.FC = () => {
           {tasks.length > 0 && (
             <button
               onClick={() => {
+                if (!requireAuth('clear tasks from the database')) return;
                 if (window.confirm(`Are you sure you want to delete all ${tasks.length} tasks from your Workbench?`)) {
                   storage.clearAllTasks();
                 }
@@ -152,7 +157,10 @@ export const WorkbenchView: React.FC = () => {
           )}
 
           <button
-            onClick={() => setShowTaskModal(true)}
+            onClick={() => {
+              if (!requireAuth('create tasks in the database')) return;
+              setShowTaskModal(true);
+            }}
             className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500"
           >
             <Plus className="h-4 w-4" />
@@ -211,6 +219,7 @@ export const WorkbenchView: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (!requireAuth('delete tasks from the database')) return;
                                 storage.deleteTask(t.id);
                               }}
                               className="opacity-0 group-hover:opacity-100 rounded-lg bg-rose-500/20 p-1 text-rose-400 hover:bg-rose-500 hover:text-white transition-all"
@@ -230,7 +239,10 @@ export const WorkbenchView: React.FC = () => {
                           <div className="flex items-center gap-1">
                             {col.status !== 'done' && (
                               <button
-                                onClick={() => storage.updateTaskStatus(t.id, 'done')}
+                                onClick={() => {
+                                  if (!requireAuth('update task status in the database')) return;
+                                  storage.updateTaskStatus(t.id, 'done');
+                                }}
                                 className="text-emerald-400 hover:underline"
                               >
                                 ✓ Done
@@ -238,7 +250,10 @@ export const WorkbenchView: React.FC = () => {
                             )}
                             {col.status === 'todo' && (
                               <button
-                                onClick={() => storage.updateTaskStatus(t.id, 'in_progress')}
+                                onClick={() => {
+                                  if (!requireAuth('update task status in the database')) return;
+                                  storage.updateTaskStatus(t.id, 'in_progress');
+                                }}
                                 className="text-indigo-400 hover:underline ml-1.5"
                               >
                                 Start →

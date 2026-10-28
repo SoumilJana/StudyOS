@@ -15,12 +15,14 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
+import { useAuth } from '../context/AuthContext';
 import { storage } from '../services/storage';
 import { aiService } from '../services/aiService';
 import { Deadline, DeadlineCategory, PriorityLevel } from '../types';
 
 export const DeadlinePlannerView: React.FC = () => {
   const { deadlines, subjects } = useStudyOS();
+  const { requireAuth } = useAuth();
 
   const [selectedDeadline, setSelectedDeadline] = useState<Deadline | null>(deadlines[0] || null);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -73,6 +75,7 @@ export const DeadlinePlannerView: React.FC = () => {
   }, [selectedDeadline]);
 
   const handleGenerateBackwardPlan = async () => {
+    if (!requireAuth('recalculate and save schedules to the database')) return;
     if (!selectedDeadline) return;
     setIsRecalculating(true);
     setRecalculateFeedback(null);
@@ -113,10 +116,12 @@ export const DeadlinePlannerView: React.FC = () => {
   };
 
   const handleDeleteDeadline = (id: string) => {
+    if (!requireAuth('delete deadlines from the database')) return;
     storage.deleteDeadline(id);
   };
 
   const handleTogglePlanStep = (index: number) => {
+    if (!requireAuth('update milestone progress in the database')) return;
     if (!selectedDeadline) return;
     const current = selectedDeadline.backwardPlan[index];
     storage.updateBackwardPlanStep(selectedDeadline.id, index, !current.completed);
@@ -126,6 +131,7 @@ export const DeadlinePlannerView: React.FC = () => {
 
   const handleCreateDeadline = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuth('add exams and deadlines to the database')) return;
     if (!newTitle || !newDueDate) return;
 
     const backwardPlan = aiService.generateBackwardPlan(newTitle, newDueDate, newHours);
@@ -165,7 +171,10 @@ export const DeadlinePlannerView: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+            if (!requireAuth('add exams or deadlines to the database')) return;
+            setShowAddModal(true);
+          }}
           className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500"
         >
           <Plus className="h-4 w-4" />

@@ -22,6 +22,7 @@ import {
   Hash,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
+import { useAuth } from '../context/AuthContext';
 import { storage } from '../services/storage';
 import { Resource, ResourceType } from '../types';
 import { parseUploadedDocument } from '../services/documentExtractor';
@@ -29,6 +30,7 @@ import { parseUploadedDocument } from '../services/documentExtractor';
 export const ResourceLibraryView: React.FC = () => {
   const navigate = useNavigate();
   const { resources, subjects } = useStudyOS();
+  const { requireAuth } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -63,6 +65,7 @@ export const ResourceLibraryView: React.FC = () => {
   const MAX_TOTAL_SIZE_MB = 100;
 
   const handleFileUpload = async (fileInput: FileList | File[] | File) => {
+    if (!requireAuth('upload and save study resources to the database')) return;
     const rawFiles = fileInput instanceof File ? [fileInput] : Array.from(fileInput);
     if (rawFiles.length === 0) return;
 
@@ -150,6 +153,7 @@ export const ResourceLibraryView: React.FC = () => {
 
   const handleCreateResource = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuth('save resources to the database')) return;
     if (!newTitle) return;
 
     const pseudoHash = `hash-${newTitle.length}-${Date.now().toString(36)}`;
@@ -207,7 +211,10 @@ export const ResourceLibraryView: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => {
+            if (!requireAuth('upload and save study resources to the database')) return;
+            setShowAddModal(true);
+          }}
           className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500"
         >
           <Plus className="h-4 w-4" />

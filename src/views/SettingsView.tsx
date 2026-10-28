@@ -32,9 +32,9 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
+import { useAuth } from '../context/AuthContext';
 import { storage } from '../services/storage';
 import { supabase } from '../services/supabaseClient';
-import { AuthModal } from '../components/auth/AuthModal';
 import { cloudSync } from '../services/cloudSync';
 import { useSyncStatus } from '../services/sync/useSyncStatus';
 import { SyncConflictPolicy } from '../services/sync/types';
@@ -42,6 +42,7 @@ import { aiService, AIConnectionTestResult } from '../services/aiService';
 
 export const SettingsView: React.FC = () => {
   const { settings } = useStudyOS();
+  const { user: currentUser, signOut, openAuthModal, requireAuth } = useAuth();
 
   const [userName, setUserName] = useState(settings.userName);
   const [dailyTarget, setDailyTarget] = useState(settings.dailyFocusTargetMinutes);
@@ -55,8 +56,6 @@ export const SettingsView: React.FC = () => {
   const [showApiKey, setShowApiKey] = useState(false);
   const [testState, setTestState] = useState<{ running: boolean; result?: AIConnectionTestResult }>({ running: false });
   const [savedSuccess, setSavedSuccess] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
   const [isResetting, setIsResetting] = useState(false);
@@ -102,22 +101,9 @@ export const SettingsView: React.FC = () => {
     setSyncStatusMsg(res.message);
   };
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setCurrentUser(data.session?.user || null);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setCurrentUser(session?.user || null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuth('save your preferences to the database')) return;
     storage.updateSettings({
       userName,
       dailyFocusTargetMinutes: Number(dailyTarget),
@@ -247,7 +233,7 @@ export const SettingsView: React.FC = () => {
 
           {currentUser ? (
             <button
-              onClick={() => supabase.auth.signOut()}
+              onClick={signOut}
               className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -255,7 +241,7 @@ export const SettingsView: React.FC = () => {
             </button>
           ) : (
             <button
-              onClick={() => setShowAuthModal(true)}
+              onClick={() => openAuthModal('connect your account to save to the database')}
               className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
             >
               <LogIn className="h-3.5 w-3.5" />
@@ -881,12 +867,6 @@ export const SettingsView: React.FC = () => {
           </button>
         </div>
       </div>
-
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        onSuccess={(u) => setCurrentUser(u)}
-      />
     </div>
   );
 };

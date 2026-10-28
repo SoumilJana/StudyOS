@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
+import { useAuth } from '../context/AuthContext';
 import { aiService, TutoringResponse } from '../services/aiService';
 import { storage } from '../services/storage';
 import { parseUploadedDocument } from '../services/documentExtractor';
@@ -25,6 +26,7 @@ import { MarkdownRenderer } from '../components/MarkdownRenderer';
 
 export const LearningStudioView: React.FC = () => {
   const { subjects, settings, resources } = useStudyOS();
+  const { requireAuth } = useAuth();
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('');
@@ -212,6 +214,7 @@ export const LearningStudioView: React.FC = () => {
   };
 
   const handleGenerateCards = async () => {
+    if (!requireAuth('generate and save flashcards to the database')) return;
     if (!selectedSubject || !currentTopic) return;
     const cards = await aiService.generateFlashcards(selectedSubject.name, currentTopic.title, 3);
     cards.forEach((c) => {
@@ -229,6 +232,7 @@ export const LearningStudioView: React.FC = () => {
   };
 
   const handleGenerateQuestions = async () => {
+    if (!requireAuth('generate and save questions to the database')) return;
     if (!selectedSubject || !currentTopic) return;
     const questions = await aiService.generateQuestions(selectedSubject.name, currentTopic.title, 3);
     questions.forEach((q) => {

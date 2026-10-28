@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Flame,
   Zap,
@@ -17,9 +17,8 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import { useStudyOS } from '../../context/StudyOSContext';
+import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../services/supabaseClient';
-import { AuthModal } from '../auth/AuthModal';
 import { SyncStatusPill } from '../sync/SyncStatusPill';
 
 interface HeaderProps {
@@ -28,6 +27,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const navigate = useNavigate();
+  const { user, signOut, openAuthModal } = useAuth();
   const {
     timer,
     pauseTimer,
@@ -40,27 +40,6 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   } = useStudyOS();
 
   const [showNotifications, setShowNotifications] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setCurrentUser(data.session?.user || null);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setCurrentUser(session?.user || null);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    setCurrentUser(null);
-  };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -195,14 +174,14 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           <SyncStatusPill />
 
           {/* Supabase Cloud Auth Button / Status */}
-          {currentUser ? (
+          {user ? (
             <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-300">
               <Cloud className="h-3.5 w-3.5 text-emerald-400" />
               <span className="hidden truncate font-medium max-w-[100px] md:inline">
-                {currentUser.email?.split('@')[0]}
+                {user.email?.split('@')[0]}
               </span>
               <button
-                onClick={handleSignOut}
+                onClick={signOut}
                 className="rounded p-0.5 hover:text-white"
                 title="Sign Out"
               >
@@ -211,11 +190,11 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
             </div>
           ) : (
             <button
-              onClick={() => setShowAuthModal(true)}
+              onClick={() => openAuthModal('access and save to your study database')}
               className="flex items-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-2.5 py-1 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20"
             >
               <UserIcon className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Supabase Auth</span>
+              <span className="hidden sm:inline">Sign In</span>
             </button>
           )}
 
@@ -279,13 +258,6 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
           </div>
         </div>
       </header>
-
-      {/* Supabase Authentication Modal */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        onSuccess={(u) => setCurrentUser(u)}
-      />
     </>
   );
 };

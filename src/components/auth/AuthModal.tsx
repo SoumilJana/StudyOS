@@ -6,10 +6,11 @@ import { storage } from '../../services/storage';
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (user: any) => void;
+  onSuccess?: (user: any) => void;
+  reason?: string | null;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess, reason }) => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -56,7 +57,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             storage.updateSettings({ userName: fullName || email.split('@')[0] });
             storage.addXP(100, 'Created Study OS Cloud Account');
             setTimeout(() => {
-              onSuccess(data.user);
+              onSuccess?.(data.user);
               onClose();
             }, 1200);
           }
@@ -75,7 +76,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             userName: data.user.user_metadata?.full_name || email.split('@')[0],
           });
           setTimeout(() => {
-            onSuccess(data.user);
+            onSuccess?.(data.user);
             onClose();
           }, 1000);
         }
@@ -108,6 +109,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {reason && (
+          <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+            <Lock className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+            <div>
+              <span className="font-bold">Authentication Required: </span>
+              <span>{reason}</span>
+            </div>
+          </div>
+        )}
 
         {errorMessage && (
           <div className="mt-4 flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">

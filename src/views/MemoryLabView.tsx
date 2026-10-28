@@ -13,11 +13,13 @@ import {
   Check,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
+import { useAuth } from '../context/AuthContext';
 import { storage } from '../services/storage';
 import { CardRating, CardFormat, Flashcard } from '../types';
 
 export const MemoryLabView: React.FC = () => {
   const { decks, flashcards, dueFlashcardsCount, subjects } = useStudyOS();
+  const { requireAuth } = useAuth();
 
   const [selectedDeckId, setSelectedDeckId] = useState<string>('all');
   const [isReviewing, setIsReviewing] = useState<boolean>(false);
@@ -54,6 +56,7 @@ export const MemoryLabView: React.FC = () => {
   };
 
   const handleRateCard = (rating: CardRating) => {
+    if (!requireAuth('save flashcard ratings to the database')) return;
     const card = dueCards[currentCardIndex];
     if (!card) return;
 
@@ -69,6 +72,7 @@ export const MemoryLabView: React.FC = () => {
 
   const handleCreateCard = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuth('add flashcards to the database')) return;
     if (!newFront || !newBack) return;
 
     let targetDeckId = newDeckId;
@@ -133,7 +137,10 @@ export const MemoryLabView: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              if (!requireAuth('create flashcards in the database')) return;
+              setShowCreateModal(true);
+            }}
             className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
           >
             <Plus className="h-4 w-4" />

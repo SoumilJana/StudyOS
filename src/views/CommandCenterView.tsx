@@ -24,12 +24,15 @@ import {
   X,
   FileText,
   AlertCircle,
+  Lock,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
+import { useAuth } from '../context/AuthContext';
 import { setupCourseFromSyllabus } from '../services/syllabusImporter';
 
 export const CommandCenterView: React.FC = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, requireAuth } = useAuth();
   const {
     subjects,
     tasks,
@@ -67,6 +70,7 @@ export const CommandCenterView: React.FC = () => {
   const MAX_TOTAL_SIZE_MB = 100;
 
   const handleFilesSelect = (filesToAdd: FileList | File[]) => {
+    if (!requireAuth('upload files and add courses to the database')) return;
     setUploadError(null);
     const newArr = Array.from(filesToAdd);
     const combined = [...uploadedFiles, ...newArr];
@@ -110,6 +114,7 @@ export const CommandCenterView: React.FC = () => {
   };
 
   const handleGenerateCourse = async () => {
+    if (!requireAuth('generate and save courses to the database')) return;
     if (uploadedFiles.length === 0) return;
     setIsGenerating(true);
     setUploadError(null);
@@ -286,6 +291,23 @@ export const CommandCenterView: React.FC = () => {
       {/* First-Time User Onboarding / Syllabus Setup Wizard */}
       {subjects.length === 0 && (
         <div id="syllabus-setup-wizard" className="rounded-2xl border border-indigo-500/40 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-slate-950 p-6 shadow-2xl space-y-4">
+          {!isAuthenticated && (
+            <div className="flex items-center justify-between rounded-xl border border-amber-500/40 bg-amber-500/10 p-3.5 text-xs text-amber-200">
+              <div className="flex items-center gap-2.5">
+                <Lock className="h-4 w-4 text-amber-400 shrink-0" />
+                <span>
+                  <strong>Sign-in Required:</strong> You must log in first before importing course materials and saving records to your database.
+                </span>
+              </div>
+              <button
+                onClick={() => requireAuth('import syllabi and add courses to the database')}
+                className="ml-3 shrink-0 rounded-lg bg-amber-500 px-3 py-1 font-bold text-slate-950 hover:bg-amber-400 transition"
+              >
+                Log In First
+              </button>
+            </div>
+          )}
+
           <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-indigo-400" />
             <h2 className="text-base font-bold text-white">Setup Your Course, Syllabus & Exam Plan</h2>
