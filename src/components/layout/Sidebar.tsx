@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { useStudyOS } from '../../context/StudyOSContext';
 
@@ -146,6 +147,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const sidebarContent = (
     <div className="flex h-full flex-col justify-between border-r border-slate-800 bg-slate-950/90 text-slate-300">
+      {/* Mobile Drawer Top Header */}
+      <div className="flex items-center justify-between border-b border-slate-800/80 px-4 py-3.5 md:hidden">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 shadow-sm">
+            <Sparkles className="h-4 w-4 text-white" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-extrabold tracking-wider text-white">
+              STUDY<span className="text-indigo-400">.OS</span>
+            </span>
+          </div>
+        </div>
+        <button
+          onClick={onCloseMobile}
+          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+          aria-label="Close menu"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
       <div className="flex-1 overflow-y-auto px-2 py-4">
         {/* Workspace Groups */}
         <div className="space-y-4">

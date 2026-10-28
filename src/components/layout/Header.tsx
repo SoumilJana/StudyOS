@@ -53,29 +53,29 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
 
   return (
     <>
-      <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-slate-800 bg-slate-950/80 px-4 backdrop-blur-md md:px-6">
+      <header className="sticky top-0 z-30 flex h-14 sm:h-16 w-full items-center justify-between border-b border-slate-800 bg-slate-950/80 px-3 sm:px-4 backdrop-blur-md md:px-6">
         {/* Left: Hamburger & Brand */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={onToggleSidebar}
             aria-label="Toggle navigation menu"
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-slate-100 md:hidden"
+            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-slate-100 md:hidden"
           >
             <Menu className="h-5 w-5" />
           </button>
 
           <div
             onClick={() => navigate('/')}
-            className="flex cursor-pointer items-center gap-2.5 font-bold tracking-tight text-white transition-opacity hover:opacity-90"
+            className="flex cursor-pointer items-center gap-2 font-bold tracking-tight text-white transition-opacity hover:opacity-90"
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 shadow-md shadow-indigo-500/20">
-              <Sparkles className="h-5 w-5 text-white" />
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 shadow-md shadow-indigo-500/20 shrink-0">
+              <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="text-base font-extrabold tracking-wider text-slate-100">
+              <span className="text-sm sm:text-base font-extrabold tracking-wider text-slate-100">
                 STUDY<span className="text-indigo-400">.OS</span>
               </span>
-              <span className="text-[10px] font-medium uppercase tracking-widest text-slate-500">
+              <span className="hidden text-[9px] sm:text-[10px] font-medium uppercase tracking-widest text-slate-500 sm:inline">
                 Supabase & OpenRouter
               </span>
             </div>
@@ -99,10 +99,10 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         </div>
 
         {/* Right: Timer Chip, Stats & Cloud Auth */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3">
           {/* Active Timer Chip */}
           <div
-            className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors ${
+            className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 sm:px-3 sm:py-1 text-[11px] sm:text-xs transition-colors ${
               timer.isRunning && !timer.isPaused
                 ? 'border-indigo-500/40 bg-indigo-500/10 text-indigo-300'
                 : timer.isPaused

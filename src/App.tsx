@@ -45,16 +45,17 @@ const AppLayout: React.FC = () => {
 
         {/* Unauthenticated Security Banner */}
         {!isAuthenticated && !isLoading && (
-          <div className="flex items-center justify-between border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-200">
-            <div className="flex items-center gap-2">
-              <Lock className="h-4 w-4 shrink-0 text-amber-400" />
-              <span>
+          <div className="flex items-center justify-between border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+            <div className="flex items-center gap-2 truncate">
+              <Lock className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+              <span className="sm:hidden font-medium truncate">Read-Only: Log in to save changes</span>
+              <span className="hidden sm:inline">
                 <strong>Read-Only Mode:</strong> You are not logged in. You must log in first before you can make changes or add courses, tasks, and deadlines to the database.
               </span>
             </div>
             <button
               onClick={() => openAuthModal('make changes or add records to your database')}
-              className="ml-3 shrink-0 rounded-lg bg-amber-500 px-3 py-1 text-xs font-bold text-slate-950 transition hover:bg-amber-400 shadow-sm"
+              className="ml-2 shrink-0 rounded-lg bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-slate-950 transition hover:bg-amber-400 shadow-sm"
             >
               Log In First
             </button>
@@ -62,7 +63,7 @@ const AppLayout: React.FC = () => {
         )}
 
         {/* Scrollable View Area */}
-        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8">
+        <main className="flex-1 overflow-y-auto px-3.5 py-4 sm:px-4 md:px-8 pb-28 md:pb-8">
           <Routes>
             <Route path="/" element={<CommandCenterView />} />
             <Route path="/learning" element={<LearningStudioView />} />

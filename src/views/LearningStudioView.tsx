@@ -40,6 +40,7 @@ export const LearningStudioView: React.FC = () => {
   const [questionsCreated, setQuestionsCreated] = useState<boolean>(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [groundingText, setGroundingText] = useState<string>('');
+  const [mobileTreeOpen, setMobileTreeOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (!selectedSubjectId && subjects.length > 0) {
@@ -289,10 +290,26 @@ export const LearningStudioView: React.FC = () => {
         </div>
       </div>
 
+      {/* Mobile Topic Selector Bar */}
+      <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 p-3 lg:hidden">
+        <div className="flex items-center gap-2 truncate pr-2">
+          <BookOpen className="h-4 w-4 shrink-0 text-indigo-400" />
+          <span className="text-xs font-semibold text-white truncate">
+            {currentTopic ? `${currentChapter?.title || ''} • ${currentTopic.title}` : 'Select a Topic'}
+          </span>
+        </div>
+        <button
+          onClick={() => setMobileTreeOpen(!mobileTreeOpen)}
+          className="shrink-0 rounded-lg bg-indigo-600/20 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-600/30 transition-colors"
+        >
+          {mobileTreeOpen ? 'Close Menu' : 'Browse Topics'}
+        </button>
+      </div>
+
       {/* Main Grid: Left Navigation Tree (Syllabus & Documents), Right Active Tutor Workspace */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
         {/* Left Column: Syllabus Hierarchy & Document Upload */}
-        <div className="space-y-4 lg:col-span-1">
+        <div className={`space-y-4 lg:col-span-1 ${mobileTreeOpen ? 'block' : 'hidden lg:block'}`}>
           {/* Document Attachment Widget */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -401,6 +418,7 @@ export const LearningStudioView: React.FC = () => {
                               key={t.id}
                               onClick={() => {
                                 setSelectedTopicId(t.id);
+                                setMobileTreeOpen(false);
                                 handleTeachStep(0);
                               }}
                               className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition-all ${
@@ -428,12 +446,12 @@ export const LearningStudioView: React.FC = () => {
         {/* Right 3 Cols: Active Tutoring Studio */}
         <div className="space-y-6 lg:col-span-3">
           {/* Step Progression Bar */}
-          <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/50 p-2.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar rounded-2xl border border-slate-800 bg-slate-900/50 p-2 sm:flex-wrap">
             {stepLabels.map((lbl, idx) => (
               <button
                 key={idx}
                 onClick={() => handleTeachStep(idx)}
-                className={`flex-1 rounded-xl px-2.5 py-1.5 text-xs font-medium transition-all ${
+                className={`shrink-0 sm:flex-1 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
                   currentStepIndex === idx
                     ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
                     : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'

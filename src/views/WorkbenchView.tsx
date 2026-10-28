@@ -186,7 +186,7 @@ export const WorkbenchView: React.FC = () => {
             return (
               <div
                 key={col.status}
-                className={`flex flex-col rounded-2xl border p-4 min-h-[500px] ${col.color}`}
+                className={`flex flex-col rounded-2xl border p-4 min-h-[140px] lg:min-h-[500px] ${col.color}`}
               >
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                   <span className="text-xs font-bold text-white uppercase tracking-wider">{col.label}</span>
@@ -211,10 +211,10 @@ export const WorkbenchView: React.FC = () => {
                           <div className="flex items-center gap-1 shrink-0">
                             <button
                               onClick={() => handleLaunchFocus(t)}
-                              className="opacity-0 group-hover:opacity-100 rounded-lg bg-indigo-600/20 p-1 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all"
+                              className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 rounded-lg bg-indigo-600/20 p-1.5 sm:p-1 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all"
                               title="Launch Pomodoro Focus for this task"
                             >
-                              <Play className="h-3 w-3 fill-current" />
+                              <Play className="h-3.5 w-3.5 sm:h-3 sm:w-3 fill-current" />
                             </button>
                             <button
                               onClick={(e) => {
@@ -222,10 +222,10 @@ export const WorkbenchView: React.FC = () => {
                                 if (!requireAuth('delete tasks from the database')) return;
                                 storage.deleteTask(t.id);
                               }}
-                              className="opacity-0 group-hover:opacity-100 rounded-lg bg-rose-500/20 p-1 text-rose-400 hover:bg-rose-500 hover:text-white transition-all"
+                              className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 rounded-lg bg-rose-500/20 p-1.5 sm:p-1 text-rose-400 hover:bg-rose-500 hover:text-white transition-all"
                               title="Delete task"
                             >
-                              <Trash2 className="h-3 w-3" />
+                              <Trash2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
                             </button>
                           </div>
                         </div>
