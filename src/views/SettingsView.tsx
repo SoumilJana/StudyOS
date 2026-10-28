@@ -25,6 +25,11 @@ import {
   AlertTriangle,
   Activity,
   Layers,
+  Key,
+  Cpu,
+  Eye,
+  EyeOff,
+  Loader2,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
 import { storage } from '../services/storage';
@@ -33,6 +38,7 @@ import { AuthModal } from '../components/auth/AuthModal';
 import { cloudSync } from '../services/cloudSync';
 import { useSyncStatus } from '../services/sync/useSyncStatus';
 import { SyncConflictPolicy } from '../services/sync/types';
+import { aiService, AIConnectionTestResult } from '../services/aiService';
 
 export const SettingsView: React.FC = () => {
   const { settings } = useStudyOS();
@@ -45,11 +51,25 @@ export const SettingsView: React.FC = () => {
   const [aiProvider, setAiProvider] = useState(settings.aiProvider);
   const [aiModel, setAiModel] = useState(settings.aiModel || 'nvidia/nemotron-3-ultra-550b-a55b:free');
   const [apiKey, setApiKey] = useState(settings.apiKey || '');
+  const [customEndpoint, setCustomEndpoint] = useState(settings.customEndpoint || '');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [testState, setTestState] = useState<{ running: boolean; result?: AIConnectionTestResult }>({ running: false });
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+
+  const handleTestAIConnection = async () => {
+    setTestState({ running: true, result: undefined });
+    const res = await aiService.testConnection({
+      aiProvider,
+      apiKey,
+      aiModel,
+      customEndpoint,
+    });
+    setTestState({ running: false, result: res });
+  };
 
   const {
     diagnostics: syncDiagnostics,
@@ -106,6 +126,7 @@ export const SettingsView: React.FC = () => {
       aiProvider,
       aiModel,
       apiKey: apiKey || undefined,
+      customEndpoint: customEndpoint || undefined,
     });
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 2500);
@@ -528,175 +549,214 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* AI Reasoning Service Configuration */}
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 space-y-4">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-amber-400" />
-            <span>AI Reasoning & Tutor Configuration</span>
-          </h2>
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 space-y-5">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-amber-400" />
+              <span>AI Reasoning, Models & API Key Configuration</span>
+            </h2>
+            <span className="text-[11px] font-mono text-emerald-400">
+              BYOK (Bring Your Own Key) • Multi-Provider • Zero Lock-in
+            </span>
+          </div>
 
+          {/* Provider Select */}
           <div>
-            <label className="text-xs font-semibold text-slate-300">Provider</label>
+            <label className="text-xs font-semibold text-slate-300">AI Provider Architecture</label>
             <select
               value={aiProvider}
               onChange={(e) => setAiProvider(e.target.value as any)}
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-slate-200"
             >
-              <option value="openrouter">OpenRouter Free Models (Server-Side Edge Proxy)</option>
-              <option value="heuristic_offline">Local Offline Heuristic Engine (100% Free, Offline)</option>
-              <option value="gemini">Google Gemini 1.5 Flash (Direct API Key)</option>
+              <option value="openrouter">OpenRouter (Free Server-Side Proxy OR Your Own API Key)</option>
+              <option value="gemini">Google Gemini (Direct API Key)</option>
+              <option value="openai">OpenAI (Direct API Key & Official Models)</option>
+              <option value="custom">Custom OpenAI-Compatible (Ollama, Groq, vLLM, LM Studio)</option>
+              <option value="heuristic_offline">Local Offline Cognitive Engine (100% Free, Zero Latency)</option>
             </select>
           </div>
 
-          {aiProvider === 'openrouter' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Free-tier OpenRouter models configured on Supabase Edge Functions:</span>
-                <span className="font-mono text-[11px] text-emerald-400">Zero Cost • Zero Client Secrets</span>
+          {/* API Key Input (for any BYOK provider) */}
+          {aiProvider !== 'heuristic_offline' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Key className="h-3.5 w-3.5 text-amber-400" />
+                  <span>
+                    {aiProvider === 'openrouter' && 'Personal OpenRouter API Key'}
+                    {aiProvider === 'gemini' && 'Google Gemini API Key'}
+                    {aiProvider === 'openai' && 'OpenAI API Key'}
+                    {aiProvider === 'custom' && 'API Key / Bearer Token'}
+                  </span>
+                </label>
+                {aiProvider === 'openrouter' && (
+                  <span className="text-[10px] text-slate-400">
+                    Optional: Leave blank to use server-side free tier proxy
+                  </span>
+                )}
               </div>
 
-              {/* Model Cards Grid / List */}
-              <div className="space-y-3">
-                {/* Primary: Gemma 4 31B Instruct */}
-                <div
-                  onClick={() => setAiModel('google/gemma-4-31b-it:free')}
-                  className={`cursor-pointer rounded-2xl border p-4 transition-all ${
-                    aiModel === 'google/gemma-4-31b-it:free'
-                      ? 'border-indigo-500 bg-slate-900/90 shadow-lg shadow-indigo-500/10'
-                      : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-900/40'
-                  }`}
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={
+                    aiProvider === 'openrouter'
+                      ? 'sk-or-v1-...'
+                      : aiProvider === 'gemini'
+                      ? 'AIzaSy...'
+                      : aiProvider === 'openai'
+                      ? 'sk-proj-...'
+                      : 'Bearer token or API key...'
+                  }
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 pr-20 text-xs font-mono text-slate-100 focus:border-indigo-500 focus:outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-200"
+                  title={showApiKey ? 'Hide key' : 'Show key'}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                      Primary
-                    </span>
-                    <input
-                      type="radio"
-                      name="selected_model"
-                      checked={aiModel === 'google/gemma-4-31b-it:free'}
-                      onChange={() => setAiModel('google/gemma-4-31b-it:free')}
-                      className="h-4 w-4 accent-indigo-600"
-                    />
-                  </div>
-
-                  <h3 className="mt-2 text-base font-bold text-white">Gemma 4 31B Instruct</h3>
-
-                  <div className="mt-1">
-                    <code className="rounded border border-slate-800 bg-slate-900 px-2 py-0.5 text-xs font-mono text-slate-300">
-                      google/gemma-4-31b-it:free
-                    </code>
-                  </div>
-
-                  <p className="mt-2 text-xs leading-relaxed text-slate-300">
-                    Use for AI tutoring, summaries, practice questions, and flashcards. It supports text and image input and has a 262K context window on OpenRouter.{' '}
-                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-                      <Sparkles className="h-2.5 w-2.5" /> OpenRouter
-                    </span>
-                  </p>
-
-                  <div className="mt-3 flex items-center justify-between">
-                    <a
-                      href="https://openrouter.ai/google/gemma-4-31b-it:free"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 text-xs text-slate-400 underline underline-offset-4 hover:text-white"
-                    >
-                      <span>View model and availability</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-
-                    <span className="text-[10px] text-amber-400 font-mono">
-                      Subject to upstream provider rate-limits
-                    </span>
-                  </div>
-                </div>
-
-                {/* Optional Fallback: Nemotron 3 Ultra */}
-                <div
-                  onClick={() => setAiModel('nvidia/nemotron-3-ultra-550b-a55b:free')}
-                  className={`cursor-pointer rounded-2xl border p-4 transition-all ${
-                    aiModel === 'nvidia/nemotron-3-ultra-550b-a55b:free'
-                      ? 'border-indigo-500 bg-slate-900/90 shadow-lg shadow-indigo-500/10'
-                      : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-900/40'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
-                      Optional fallback
-                    </span>
-                    <input
-                      type="radio"
-                      name="selected_model"
-                      checked={aiModel === 'nvidia/nemotron-3-ultra-550b-a55b:free'}
-                      onChange={() => setAiModel('nvidia/nemotron-3-ultra-550b-a55b:free')}
-                      className="h-4 w-4 accent-indigo-600"
-                    />
-                  </div>
-
-                  <h3 className="mt-2 text-base font-bold text-white">Nemotron 3 Ultra</h3>
-
-                  <div className="mt-1">
-                    <code className="rounded border border-slate-800 bg-slate-900 px-2 py-0.5 text-xs font-mono text-slate-300">
-                      nvidia/nemotron-3-ultra-550b-a55b:free
-                    </code>
-                  </div>
-
-                  <p className="mt-2 text-xs leading-relaxed text-slate-300">
-                    Test for harder reasoning and planning tasks. Note that free endpoint inputs may be logged and used to improve NVIDIA products, so do not send confidential material.{' '}
-                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-                      <Sparkles className="h-2.5 w-2.5" /> OpenRouter
-                    </span>
-                  </p>
-
-                  <div className="mt-3 flex items-center justify-between">
-                    <a
-                      href="https://openrouter.ai/nvidia/nemotron-3-ultra-550b-a55b:free"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="inline-flex items-center gap-1 text-xs text-slate-400 underline underline-offset-4 hover:text-white"
-                    >
-                      <span>View model and availability</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-
-                    <span className="text-[10px] text-emerald-400 font-mono">
-                      ✓ Benchmark: 100% Pass (375ms avg)
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Syllabus Testing & Comparison Callout */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-2">
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  Before settling on the default, test both against 10–20 questions from your actual syllabus. Compare factual accuracy, explanation quality, hallucinations, structured JSON reliability, response time, and rate limits.
-                </p>
-                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800/60 text-[11px]">
-                  <span className="text-slate-400">Ethical Hacking (PECCS701I) Syllabus Benchmark:</span>
-                  <span className="rounded bg-emerald-500/20 px-2 py-0.5 font-mono text-emerald-300">
-                    Nemotron 3 Ultra 100% Pass
-                  </span>
-                  <span className="rounded bg-indigo-500/20 px-2 py-0.5 font-mono text-indigo-300">
-                    Auto-Fallback Enabled
-                  </span>
-                </div>
+                  {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
             </div>
           )}
 
-          {aiProvider === 'gemini' && (
+          {/* Custom Endpoint URL (if Custom is chosen) */}
+          {aiProvider === 'custom' && (
             <div>
-              <label className="text-xs font-semibold text-slate-300">Gemini API Key</label>
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Radio className="h-3.5 w-3.5 text-cyan-400" />
+                <span>Custom OpenAI-Compatible Base URL</span>
+              </label>
               <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="AIzaSy..."
-                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-slate-100 font-mono focus:border-indigo-500 focus:outline-none"
+                type="text"
+                value={customEndpoint}
+                onChange={(e) => setCustomEndpoint(e.target.value)}
+                placeholder="http://localhost:11434/v1 or https://api.groq.com/openai/v1"
+                className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs font-mono text-slate-100 focus:border-indigo-500 focus:outline-none"
               />
+              <p className="mt-1 text-[10px] text-slate-400">
+                Compatible with Ollama, Groq, LM Studio, vLLM, and LiteLLM local servers.
+              </p>
             </div>
           )}
+
+          {/* Model Selection & Custom Model Input */}
+          {aiProvider !== 'heuristic_offline' && (
+            <div className="space-y-3">
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Cpu className="h-3.5 w-3.5 text-indigo-400" />
+                <span>Active Model Slug / Identifier</span>
+              </label>
+
+              {/* Quick Preset Pills */}
+              <div className="flex flex-wrap gap-1.5">
+                <span className="text-[10px] text-slate-400 self-center mr-1">Quick Select:</span>
+                {[
+                  { label: 'Gemma 4 31B (Free)', id: 'google/gemma-4-31b-it:free' },
+                  { label: 'Nemotron 3 Ultra (Free)', id: 'nvidia/nemotron-3-ultra-550b-a55b:free' },
+                  { label: 'Claude 3.5 Sonnet', id: 'anthropic/claude-3.5-sonnet' },
+                  { label: 'GPT-4o', id: 'openai/gpt-4o' },
+                  { label: 'DeepSeek R1', id: 'deepseek/deepseek-r1' },
+                  { label: 'Llama 3.3 70B', id: 'meta-llama/llama-3.3-70b-instruct' },
+                  { label: 'Gemini 1.5 Flash', id: 'gemini-1.5-flash' },
+                ].map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setAiModel(m.id)}
+                    className={`rounded-lg px-2.5 py-1 text-[10px] font-mono transition-colors ${
+                      aiModel === m.id
+                        ? 'bg-indigo-600 text-white font-bold'
+                        : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Editable Model Slug Input */}
+              <input
+                type="text"
+                value={aiModel}
+                onChange={(e) => setAiModel(e.target.value)}
+                placeholder="e.g. google/gemma-4-31b-it:free or any custom model string"
+                className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs font-mono text-slate-100 focus:border-indigo-500 focus:outline-none"
+              />
+              <p className="text-[10px] text-slate-400">
+                You can type or paste any model ID from OpenRouter, Gemini, or your custom endpoint above.
+              </p>
+            </div>
+          )}
+
+          {/* Test Connection Button & Status Box */}
+          <div className="space-y-3 pt-1 border-t border-slate-800/80">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-slate-400">Verify your API credentials and model readiness:</span>
+              <button
+                type="button"
+                onClick={handleTestAIConnection}
+                disabled={testState.running}
+                className="flex items-center gap-1.5 rounded-xl border border-indigo-500/50 bg-indigo-500/10 px-3.5 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 disabled:opacity-50"
+              >
+                {testState.running ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>Testing Connection...</span>
+                  </>
+                ) : (
+                  <>
+                    <Activity className="h-3.5 w-3.5" />
+                    <span>Test AI Model Connection</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {testState.result && (
+              <div
+                className={`rounded-xl border p-3 text-xs ${
+                  testState.result.success
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                    : 'border-rose-500/30 bg-rose-500/10 text-rose-200'
+                }`}
+              >
+                <div className="flex items-center gap-2 font-bold">
+                  {testState.result.success ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+                  )}
+                  <span>{testState.result.message}</span>
+                </div>
+                {testState.result.latencyMs !== undefined && (
+                  <div className="mt-1 font-mono text-[10px] text-slate-400">
+                    Roundtrip Latency: {testState.result.latencyMs}ms
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Free Presets & Syllabus Benchmark Card */}
+          <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 space-y-2">
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Before settling on the default, test against 10–20 questions from your actual syllabus. Compare factual accuracy, explanation quality, hallucinations, structured JSON reliability, response time, and rate limits.
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-800/60 text-[11px]">
+              <span className="text-slate-400">Ethical Hacking (PECCS701I) Syllabus Benchmark:</span>
+              <span className="rounded bg-emerald-500/20 px-2 py-0.5 font-mono text-emerald-300">
+                Nemotron 3 Ultra 100% Pass (375ms)
+              </span>
+              <span className="rounded bg-indigo-500/20 px-2 py-0.5 font-mono text-indigo-300">
+                Auto-Fallback Enabled
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Save Button */}

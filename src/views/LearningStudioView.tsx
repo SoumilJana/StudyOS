@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   GraduationCap,
   Sparkles,
@@ -13,24 +13,91 @@ import {
   AlertCircle,
   ArrowRight,
   Check,
+  FileUp,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
 import { aiService, TutoringResponse } from '../services/aiService';
 import { storage } from '../services/storage';
+import { parseUploadedDocument } from '../services/documentExtractor';
 
 export const LearningStudioView: React.FC = () => {
-  const { subjects, settings } = useStudyOS();
+  const { subjects, settings, resources } = useStudyOS();
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
   const [selectedTopicId, setSelectedTopicId] = useState<string>('top-raft-safety');
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [tutoringData, setTutoringData] = useState<TutoringResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [isParsingDoc, setIsParsingDoc] = useState<boolean>(false);
   const [userSelectedOption, setUserSelectedOption] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState<boolean>(false);
   const [flashcardsCreated, setFlashcardsCreated] = useState<boolean>(false);
   const [questionsCreated, setQuestionsCreated] = useState<boolean>(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [groundingText, setGroundingText] = useState<string>('');
+
+  useEffect(() => {
+    const cachedText = sessionStorage.getItem('study_os_active_grounding_text');
+    const cachedTitle = sessionStorage.getItem('study_os_active_grounding_title');
+    if (cachedText) {
+      setGroundingText(cachedText);
+      setUploadedFileName(cachedTitle || 'Custom Material');
+    }
+  }, []);
+
+  const handleFileUpload = async (file: File) => {
+    setIsParsingDoc(true);
+    try {
+      const doc = await parseUploadedDocument(file);
+      setGroundingText(doc.extractedText);
+      const titleLabel = `${doc.title} (${doc.pageCount ? `${doc.pageCount} pgs` : `${doc.wordCount.toLocaleString()} wds`})`;
+      setUploadedFileName(titleLabel);
+      sessionStorage.setItem('study_os_active_grounding_text', doc.extractedText);
+      sessionStorage.setItem('study_os_active_grounding_title', titleLabel);
+
+      // Save to library for persistence
+      const res = {
+        id: `res-${Date.now()}`,
+        title: doc.title,
+        type: doc.type,
+        extractedText: doc.extractedText,
+        extractedSections: doc.sections,
+        fileHash: doc.fileHash,
+        fileSize: doc.fileSize,
+        subjectId: selectedSubjectId,
+        tags: [doc.type.toUpperCase(), 'Studio Grounding'],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      storage.saveResource(res);
+      storage.createNotification({
+        title: 'Study Material Grounded',
+        message: `Parsed ${file.name}. Tutor is now actively grounded in your source notes.`,
+        category: 'system',
+      });
+      // Re-trigger current step with grounding
+      if (currentTopic && currentChapter) {
+        handleTeachStep(currentStepIndex, doc.extractedText);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Error reading file: ${msg}`);
+    } finally {
+      setIsParsingDoc(false);
+    }
+  };
+
+  const handleClearGrounding = () => {
+    setGroundingText('');
+    setUploadedFileName(null);
+    sessionStorage.removeItem('study_os_active_grounding_text');
+    sessionStorage.removeItem('study_os_active_grounding_title');
+    if (currentTopic && currentChapter) {
+      handleTeachStep(currentStepIndex, undefined);
+    }
+  };
 
   const selectedSubject = subjects.find((s) => s.id === selectedSubjectId);
 
@@ -51,7 +118,7 @@ export const LearningStudioView: React.FC = () => {
   }
 
   // Fetch or trigger step
-  const handleTeachStep = async (stepIdx: number) => {
+  const handleTeachStep = async (stepIdx: number, overrideText?: string) => {
     if (!currentTopic || !currentChapter) return;
     setLoading(true);
     setCurrentStepIndex(stepIdx);
@@ -61,12 +128,13 @@ export const LearningStudioView: React.FC = () => {
     setQuestionsCreated(false);
 
     try {
+      const activeText = overrideText !== undefined ? overrideText : groundingText;
       const response = await aiService.explainChapterTopic(
         currentChapter.title,
         currentTopic.title,
         stepIdx,
         settings,
-        uploadedFileName ? `Document excerpt: ${uploadedFileName}` : undefined
+        activeText || undefined
       );
       setTutoringData(response);
     } catch (err) {
@@ -188,34 +256,87 @@ export const LearningStudioView: React.FC = () => {
         {/* Left Column: Syllabus Hierarchy & Document Upload */}
         <div className="space-y-4 lg:col-span-1">
           {/* Document Attachment Widget */}
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Source Document Grounding
-            </span>
-            <div className="mt-2.5">
-              <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-3 text-center transition-colors hover:border-indigo-500 hover:bg-slate-900">
-                <Upload className="h-5 w-5 text-indigo-400" />
-                <span className="mt-1 text-xs font-medium text-slate-300">
-                  {uploadedFileName || 'Drop PDF, DOCX, or Notes'}
-                </span>
-                <span className="text-[10px] text-slate-500">Auto-parsed for retrieval</span>
-                <input
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setUploadedFileName(file.name);
-                      storage.createNotification({
-                        title: 'Document Uploaded',
-                        message: `Parsed ${file.name}. Tutor will now ground explanations in source text.`,
-                        category: 'system',
-                      });
-                    }
-                  }}
-                />
-              </label>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Source Material Grounding
+              </span>
+              {uploadedFileName && (
+                <button
+                  onClick={handleClearGrounding}
+                  className="text-[10px] text-rose-400 hover:text-rose-300 font-medium flex items-center gap-0.5"
+                >
+                  <X className="h-3 w-3" />
+                  <span>Clear</span>
+                </button>
+              )}
             </div>
+
+            {uploadedFileName ? (
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-1.5">
+                <div className="flex items-center gap-2 text-emerald-300 text-xs font-bold">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{uploadedFileName}</span>
+                </div>
+                <p className="text-[10px] text-slate-300 leading-tight">
+                  Tutor explanations and active recall questions are strictly grounded in this source document.
+                </p>
+              </div>
+            ) : isParsingDoc ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-center">
+                <Loader2 className="h-5 w-5 animate-spin text-indigo-400" />
+                <span className="mt-2 text-xs font-semibold text-white">Extracting document text...</span>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-3 text-center transition-colors hover:border-indigo-500 hover:bg-slate-900">
+                  <Upload className="h-5 w-5 text-indigo-400" />
+                  <span className="mt-1 text-xs font-medium text-slate-300">
+                    Drop PDF, DOCX, or Notes
+                  </span>
+                  <span className="text-[10px] text-slate-500">In-browser client-side parsing</span>
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.doc,.txt,.md,.markdown,.json,.py,.js,.ts,.cpp,.c,.java"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleFileUpload(file);
+                    }}
+                  />
+                </label>
+
+                {resources.length > 0 && (
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">Or choose from Resource Library:</label>
+                    <select
+                      onChange={(e) => {
+                        const res = resources.find((r) => r.id === e.target.value);
+                        if (res) {
+                          setGroundingText(res.extractedText || '');
+                          const label = `${res.title} (${res.type.toUpperCase()})`;
+                          setUploadedFileName(label);
+                          sessionStorage.setItem('study_os_active_grounding_text', res.extractedText || '');
+                          sessionStorage.setItem('study_os_active_grounding_title', label);
+                          if (currentTopic && currentChapter) {
+                            handleTeachStep(currentStepIndex, res.extractedText);
+                          }
+                        }
+                      }}
+                      defaultValue=""
+                      className="w-full rounded-xl border border-slate-800 bg-slate-950 px-2.5 py-1.5 text-xs text-slate-200"
+                    >
+                      <option value="" disabled>Select saved document...</option>
+                      {resources.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.title} ({r.type.toUpperCase()})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Chapters & Topics Selector */}
