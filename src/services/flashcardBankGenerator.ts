@@ -283,3 +283,145 @@ export function generateCuratedFlashcardsForTopics(
 
   return cards;
 }
+
+/**
+ * Generate 3 high-yield active-recall flashcards for a single topic upon completion.
+ */
+export function generateFlashcardsForSingleTopic(
+  subject: Subject,
+  deck: FlashcardDeck,
+  topic: Topic,
+  combinedText: string = ''
+): Flashcard[] {
+  const cards: Flashcard[] = [];
+  const topTitle = topic.title.trim();
+  const lTitle = topTitle.toLowerCase();
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // 1. Check curated library
+  const curatedMatches = CURATED_SECURITY_FLASHCARDS.filter((tmpl) =>
+    tmpl.pattern.test(lTitle)
+  );
+
+  curatedMatches.slice(0, 2).forEach((match, idx) => {
+    cards.push({
+      id: `card-${subject.id}-${topic.id}-auto-${Date.now().toString(36)}-${idx}`,
+      deckId: deck.id,
+      subjectId: subject.id,
+      topicId: topic.id,
+      front: match.front,
+      back: match.back,
+      format: match.format || 'concept',
+      state: 'new',
+      intervalDays: 1,
+      easeFactor: 2.5,
+      repetitions: 0,
+      lapses: 0,
+      dueDate: todayStr,
+      tags: [subject.code, topic.title, 'Auto-Generated'],
+      reviewHistory: [],
+      createdAt: new Date().toISOString(),
+    });
+  });
+
+  // 2. Synthesize stage-focused cards if fewer than 3
+  if (cards.length < 3) {
+    cards.push({
+      id: `card-${subject.id}-${topic.id}-auto-trap-${Date.now().toString(36)}`,
+      deckId: deck.id,
+      subjectId: subject.id,
+      topicId: topic.id,
+      front: `What is the most common exam trap or misconception regarding ${topTitle}?`,
+      back: `• Trap: Believing that client-side controls or passive observation alone secures ${topTitle}.\n• True Rule: In ${subject.name}, ${topTitle} requires strict server-side boundary validation, least privilege, and fail-closed defaults.\n• Exam Pointer: Watch out for absolute terms ("always", "100% immune") in multiple-choice questions.`,
+      format: 'concept',
+      state: 'new',
+      intervalDays: 1,
+      easeFactor: 2.5,
+      repetitions: 0,
+      lapses: 0,
+      dueDate: todayStr,
+      tags: [subject.code, topic.title, 'Exam Trap'],
+      reviewHistory: [],
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  if (cards.length < 3) {
+    cards.push({
+      id: `card-${subject.id}-${topic.id}-auto-mech-${Date.now().toString(36)}`,
+      deckId: deck.id,
+      subjectId: subject.id,
+      topicId: topic.id,
+      front: `Describe the 4-phase execution lifecycle and protocol invariant of ${topTitle}.`,
+      back: `1. Ingress Check: Parameters inspected & validated\n2. Boundary Inspection: Verification against protocol invariants\n3. Execution: Logic processed in isolated context\n4. Output Delivery & Audit: State committed to immutable transaction logs.\n• Core Invariant: Never allow payload execution prior to authorization verification.`,
+      format: 'concept',
+      state: 'new',
+      intervalDays: 1,
+      easeFactor: 2.5,
+      repetitions: 0,
+      lapses: 0,
+      dueDate: todayStr,
+      tags: [subject.code, topic.title, 'Protocol Lifecycle'],
+      reviewHistory: [],
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  return cards;
+}
+
+/**
+ * Generate comprehensive module-wide synthesis flashcards upon 100% module completion.
+ */
+export function generateModuleMasteryCards(
+  subject: Subject,
+  deck: FlashcardDeck,
+  module: Module,
+  combinedText: string = ''
+): Flashcard[] {
+  const cards: Flashcard[] = [];
+  const todayStr = new Date().toISOString().split('T')[0];
+  const modTitle = module.title;
+  const topics = module.chapters.flatMap((c) => c.topics);
+  const topicNames = topics.map((t) => t.title).slice(0, 5).join(', ');
+
+  // Module Synthesis Card 1: Comprehensive Scope & Integration
+  cards.push({
+    id: `card-mod-${module.id}-synth-1-${Date.now().toString(36)}`,
+    deckId: deck.id,
+    subjectId: subject.id,
+    front: `[Module Mastery] Summarize the core architectural objectives of ${modTitle} and how its topics interconnect.`,
+    back: `• Scope: Encompasses key domain areas including: ${topicNames}.\n• Attack/Defense Integration: Moves from foundational recon/modeling into operational execution and layered hardening.\n• Exam Standard: Students must be able to chain these mechanisms together in real-world scenario analysis.`,
+    format: 'concept',
+    state: 'new',
+    intervalDays: 1,
+    easeFactor: 2.5,
+    repetitions: 0,
+    lapses: 0,
+    dueDate: todayStr,
+    tags: [subject.code, modTitle, 'Module Mastery'],
+    reviewHistory: [],
+    createdAt: new Date().toISOString(),
+  });
+
+  // Module Synthesis Card 2: Defense-in-Depth & Failure Countermeasures
+  cards.push({
+    id: `card-mod-${module.id}-synth-2-${Date.now().toString(36)}`,
+    deckId: deck.id,
+    subjectId: subject.id,
+    front: `[Module Mastery] What is the Defense-in-Depth hierarchy across ${modTitle}?`,
+    back: `1. Perimeter / Ingress: Boundary validation & input parameterization\n2. Internal Architecture: Least privilege, mutual authentication, and cryptographic integrity\n3. Detection & Egress: Continuous immutable audit logging, anomaly detection, and fail-closed incident response.`,
+    format: 'concept',
+    state: 'new',
+    intervalDays: 1,
+    easeFactor: 2.5,
+    repetitions: 0,
+    lapses: 0,
+    dueDate: todayStr,
+    tags: [subject.code, modTitle, 'Defense-in-Depth'],
+    reviewHistory: [],
+    createdAt: new Date().toISOString(),
+  });
+
+  return cards;
+}

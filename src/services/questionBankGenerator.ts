@@ -454,3 +454,164 @@ export function generateCuratedQuestionsForTopics(
 
   return generated;
 }
+
+/**
+ * Generate 3 focused exam practice questions for a single topic upon completion.
+ */
+export function generateQuestionsForSingleTopic(
+  subject: Subject,
+  topic: Topic,
+  combinedText: string = ''
+): Question[] {
+  const questions: Question[] = [];
+  const topTitle = topic.title.trim();
+  const lTitle = topTitle.toLowerCase();
+
+  // Check curated templates
+  const matchingTemplates = CURATED_SECURITY_QUESTIONS.filter((tmpl) =>
+    tmpl.pattern.test(lTitle)
+  );
+
+  matchingTemplates.slice(0, 2).forEach((tpl, idx) => {
+    questions.push({
+      id: `q-${subject.id}-${topic.id}-auto-${Date.now().toString(36)}-${idx}`,
+      subjectId: subject.id,
+      topicId: topic.id,
+      type: 'mcq_single',
+      prompt: tpl.prompt,
+      options: tpl.options,
+      correctAnswer: tpl.correctAnswer,
+      explanation: tpl.explanation,
+      difficulty: tpl.difficulty,
+      marks: 2,
+      negativeMarks: 0.5,
+      tags: [subject.code, topic.title, 'Auto-Generated'],
+    });
+  });
+
+  // Synthesize scenario question if fewer than 3
+  if (questions.length < 3) {
+    questions.push({
+      id: `q-${subject.id}-${topic.id}-auto-scen-${Date.now().toString(36)}-${questions.length}`,
+      subjectId: subject.id,
+      topicId: topic.id,
+      type: 'mcq_single',
+      prompt: `In an enterprise security evaluation of ${topTitle}, what is the mandatory architectural control required to prevent unauthorized exploitation?`,
+      options: [
+        { id: 'opt-a', text: `Enforce strict parameterization, server-side boundary validation, and least privilege.` },
+        { id: 'opt-b', text: `Rely exclusively on client-side browser attributes without server verification.` },
+        { id: 'opt-c', text: `Grant temporary unrestricted permissions to bypass authentication bottlenecks.` },
+        { id: 'opt-d', text: `Disable audit transaction logs to accelerate system response times.` },
+      ],
+      correctAnswer: 'opt-a',
+      explanation: `Systematic mitigation of ${topTitle} mandates server-side boundary validation, parameterization, and least privilege.`,
+      difficulty: 3,
+      marks: 2,
+      negativeMarks: 0.5,
+      tags: [subject.code, topic.title, 'Exam Scenario'],
+    });
+  }
+
+  // Synthesize failure mode / detection question if still fewer than 3
+  if (questions.length < 3) {
+    questions.push({
+      id: `q-${subject.id}-${topic.id}-auto-trap-${Date.now().toString(36)}-${questions.length}`,
+      subjectId: subject.id,
+      topicId: topic.id,
+      type: 'mcq_single',
+      prompt: `During incident triage involving ${topTitle}, what indicator provides the most definitive evidence of a successful state compromise?`,
+      options: [
+        { id: 'opt-a', text: `Anomalous privilege escalation tokens and unauthorized state mutation in signed audit logs.` },
+        { id: 'opt-b', text: `Normal transient ping latency fluctuations on client workstations.` },
+        { id: 'opt-c', text: `Browser cache refresh operations during scheduled maintenance.` },
+        { id: 'opt-d', text: `Standard DNS resolution for internal domain controllers.` },
+      ],
+      correctAnswer: 'opt-a',
+      explanation: `Compromise of ${topTitle} manifests as unauthorized state mutation, privilege changes, and non-repudiated log anomalies.`,
+      difficulty: 4,
+      marks: 2,
+      negativeMarks: 0.5,
+      tags: [subject.code, topic.title, 'Incident Analysis'],
+    });
+  }
+
+  return questions.slice(0, 3);
+}
+
+/**
+ * Generate a comprehensive 3-question module mastery quiz upon 100% module completion.
+ */
+export function generateModuleMasteryQuestions(
+  subject: Subject,
+  module: Module,
+  combinedText: string = ''
+): Question[] {
+  const questions: Question[] = [];
+  const modTitle = module.title;
+  const topics = module.chapters.flatMap((c) => c.topics);
+
+  // Question 1: Comprehensive Defense-in-Depth Principle
+  questions.push({
+    id: `q-mod-${module.id}-mastery-1-${Date.now().toString(36)}`,
+    subjectId: subject.id,
+    topicId: topics[0]?.id,
+    type: 'mcq_single',
+    prompt: `[${modTitle} Comprehensive Exam] Which principle governs the defensive architecture across all components of ${modTitle}?`,
+    options: [
+      { id: 'opt-a', text: `Defense-in-depth: combining perimeter boundary inspection, least-privilege access, and fail-closed defaults.` },
+      { id: 'opt-b', text: `Perimeter-only defense: trusting all internal hosts and users once inside the local network.` },
+      { id: 'opt-c', text: `Reactive patching: operating without monitoring until an explicit breach is reported.` },
+      { id: 'opt-d', text: `Disabling cryptographic handshakes during peak enterprise network utilization.` },
+    ],
+    correctAnswer: 'opt-a',
+    explanation: `Defense-in-depth requires multiple overlapping defensive layers across the entire scope of ${modTitle}.`,
+    difficulty: 4,
+    marks: 3,
+    negativeMarks: 1,
+    tags: [subject.code, modTitle, 'Module Final Exam'],
+  });
+
+  // Question 2: Attack Chain Synthesis
+  questions.push({
+    id: `q-mod-${module.id}-mastery-2-${Date.now().toString(36)}`,
+    subjectId: subject.id,
+    topicId: topics[1]?.id || topics[0]?.id,
+    type: 'mcq_single',
+    prompt: `[${modTitle} Cross-Topic Scenario] An adversary combines initial reconnaissance with privilege escalation in ${modTitle}. Which telemetry stream provides the highest fidelity correlation?`,
+    options: [
+      { id: 'opt-a', text: `Correlating SIEM endpoint process tree parent-child anomalies with central authentication audit logs.` },
+      { id: 'opt-b', text: `Inspecting local client browser history on an isolated guest VLAN.` },
+      { id: 'opt-c', text: `Reviewing uncompressed disk space utilization percentages.` },
+      { id: 'opt-d', text: `Monitoring battery cycle degradation on enterprise laptops.` },
+    ],
+    correctAnswer: 'opt-a',
+    explanation: `Advanced cross-domain attacks across ${modTitle} require correlating endpoint process lineage (EDR) with central identity audit logs (SIEM).`,
+    difficulty: 4,
+    marks: 3,
+    negativeMarks: 1,
+    tags: [subject.code, modTitle, 'Multi-Stage Attack Chain'],
+  });
+
+  // Question 3: Strategic Hardening & Invariant Verification
+  questions.push({
+    id: `q-mod-${module.id}-mastery-3-${Date.now().toString(36)}`,
+    subjectId: subject.id,
+    topicId: topics[2]?.id || topics[0]?.id,
+    type: 'mcq_single',
+    prompt: `[${modTitle} Strategic Synthesis] To achieve zero-trust maturity across all topics covered in ${modTitle}, which control is non-negotiable?`,
+    options: [
+      { id: 'opt-a', text: `Continuous explicit cryptographic validation of every request identity and runtime context.` },
+      { id: 'opt-b', text: `Implicit trust granted to all requests originating behind the internal border gateway.` },
+      { id: 'opt-c', text: `Allowing single-factor legacy passwords for administrative bastion hosts.` },
+      { id: 'opt-d', text: `Caching access authorization tokens indefinitely without expiration.` },
+    ],
+    correctAnswer: 'opt-a',
+    explanation: `Zero-trust architecture mandates continuous explicit authentication and authorization verification regardless of network location.`,
+    difficulty: 4,
+    marks: 3,
+    negativeMarks: 1,
+    tags: [subject.code, modTitle, 'Zero Trust Architecture'],
+  });
+
+  return questions;
+}

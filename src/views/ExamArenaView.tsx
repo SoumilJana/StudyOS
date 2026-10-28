@@ -25,6 +25,7 @@ import { storage } from '../services/storage';
 import { aiService } from '../services/aiService';
 import { Question, MistakeRecord } from '../types';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import { generateCuratedQuestionsForTopics } from '../services/questionBankGenerator';
 
 export const ExamArenaView: React.FC = () => {
   const { questions, mistakes, subjects, weakTopics } = useStudyOS();
@@ -229,6 +230,19 @@ export const ExamArenaView: React.FC = () => {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleAutoPopulatePool = () => {
+    if (!requireAuth('populate question bank')) return;
+    if (!activeSubject) return;
+    const generated = generateCuratedQuestionsForTopics(activeSubject, activeSubject.modules, '');
+    generated.forEach((q) => storage.saveQuestion(q));
+    storage.addXP(40, `Populated question bank with ${generated.length} curriculum questions`);
+    storage.createNotification({
+      title: 'Question Bank Expanded! ⚔️',
+      message: `Generated ${generated.length} active retrieval practice questions spanning all modules of ${activeSubject.name}.`,
+      category: 'exam',
+    });
   };
 
   const handleSelectAnswer = (qId: string, answer: string) => {
@@ -461,13 +475,27 @@ export const ExamArenaView: React.FC = () => {
               )}
             </div>
 
-            {filteredPool.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-indigo-500/30 bg-indigo-950/20 p-5 text-center">
-                <Swords className="mx-auto h-7 w-7 text-indigo-400" />
-                <h3 className="mt-2 text-sm font-bold text-white">No Questions in this Filter</h3>
-                <p className="mt-1 text-xs text-slate-400 max-w-md mx-auto">
-                  Click "+ Generate AI Questions" above to instantly synthesize examination questions from your course text.
-                </p>
+            {/* Auto-Populate Question Pool Prompt if low */}
+            {filteredPool.length < 15 && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 p-4 shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600/20 text-indigo-400 shrink-0">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-white">Expand Your Practice Bank</h4>
+                    <p className="text-[11px] text-slate-300">
+                      Currently {filteredPool.length} questions available. Auto-generate 20+ realistic exam questions covering all topics in {activeSubject?.name || 'your curriculum'}.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAutoPopulatePool}
+                  className="shrink-0 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-indigo-500 shadow-md shadow-indigo-600/30 transition-all"
+                >
+                  + Generate Bank for All Topics
+                </button>
               </div>
             )}
 
@@ -690,14 +718,29 @@ export const ExamArenaView: React.FC = () => {
                 })}
               </div>
 
-              {/* Finish Exam Button */}
-              <button
-                onClick={handleFinishTest}
-                className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-rose-500"
-              >
-                <Send className="h-3.5 w-3.5" />
-                <span>Submit Assessment</span>
-              </button>
+              {/* Action Buttons: Quit or Submit */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to quit this test? Unsubmitted progress will be discarded.')) {
+                      setIsTestRunning(false);
+                      setTestCompleted(false);
+                      localStorage.removeItem('study_os_active_test');
+                    }
+                  }}
+                  className="rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                >
+                  Quit Drill
+                </button>
+                <button
+                  onClick={handleFinishTest}
+                  className="flex items-center gap-1.5 rounded-xl bg-rose-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-rose-500 shadow-md shadow-rose-600/20"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>Submit Assessment</span>
+                </button>
+              </div>
             </div>
 
             {/* Current Question Body */}

@@ -149,6 +149,35 @@ export const DEFAULT_FRESH_GAMIFICATION: GamificationState = {
   ],
 };
 
+export function isCorruptFlashcard(card: any): boolean {
+  if (!card) return true;
+  const f = (card.front || '').toLowerCase();
+  const b = (card.back || '').toLowerCase();
+  if (!f.trim() || !b.trim()) return true;
+  if (
+    f.includes('pdf ===') ||
+    f.includes('===') ||
+    f.includes('of and security breaches') ||
+    f.includes('mechanism of and ') ||
+    f.includes('what is the core definition and mechanism of and') ||
+    f.includes('what is the core definition and mechanism of pdf')
+  ) {
+    return true;
+  }
+  if (
+    b.includes('a fundamental security concept in') &&
+    b.includes('understanding this mechanism is essential')
+  ) {
+    return true;
+  }
+  if (
+    b.includes('understanding this mechanism is essential for vulnerability discovery')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 class StudyOSStorage {
   private listeners: Set<Listener> = new Set();
 
@@ -245,26 +274,7 @@ class StudyOSStorage {
       this.flashcards = this.loadFromStorage('study_os_flashcards', []);
 
       // Sanitize any corrupted legacy flashcards produced by previous fragmented topic parsing
-      this.flashcards = this.flashcards.filter((c) => {
-        const f = c.front?.toLowerCase() || '';
-        const b = c.back?.toLowerCase() || '';
-        if (
-          f.includes('pdf ===') ||
-          f.includes('===') ||
-          f.includes('of and security breaches') ||
-          f.includes('mechanism of and ') ||
-          f.includes('what is the core definition and mechanism of and')
-        ) {
-          return false;
-        }
-        if (
-          b.includes('a fundamental security concept in') &&
-          b.includes('understanding this mechanism is essential')
-        ) {
-          return false;
-        }
-        return true;
-      });
+      this.flashcards = this.flashcards.filter((c) => !isCorruptFlashcard(c));
 
       // Auto-populate / upgrade flashcard deck if user has subjects but flashcards are legacy/depleted
       if (this.subjects.length > 0 && this.flashcards.length < 15) {
@@ -929,10 +939,42 @@ class StudyOSStorage {
   }
 
   public getFlashcards(): Flashcard[] {
+    const valid = this.flashcards.filter((c) => !isCorruptFlashcard(c));
+    if (valid.length !== this.flashcards.length) {
+      this.flashcards = valid;
+      this.saveToStorage('study_os_flashcards', this.flashcards);
+    }
+    // Auto-populate if user has subjects but flashcards are depleted
+    if (this.subjects.length > 0 && this.flashcards.length < 15) {
+      for (const sub of this.subjects) {
+        let deck = this.decks.find((d) => d.subjectId === sub.id) || this.decks[0];
+        if (!deck) {
+          deck = {
+            id: `deck-${sub.id}-${Date.now().toString(36)}`,
+            title: `${sub.name} Mastery Deck`,
+            subjectId: sub.id,
+            description: `High-yield active recall flashcards generated across all modules of ${sub.name}.`,
+            color: '#6366f1',
+            cardCount: 20,
+            createdAt: new Date().toISOString(),
+          };
+          this.decks.push(deck);
+          this.saveToStorage('study_os_decks', this.decks);
+        }
+        const newCards = generateCuratedFlashcardsForTopics(sub, deck, sub.modules, '');
+        for (const nc of newCards) {
+          if (!this.flashcards.some((c) => c.front === nc.front)) {
+            this.flashcards.push(nc);
+          }
+        }
+      }
+      this.saveToStorage('study_os_flashcards', this.flashcards);
+    }
     return [...this.flashcards];
   }
 
   public saveFlashcard(card: Flashcard): void {
+    if (isCorruptFlashcard(card)) return;
     const index = this.flashcards.findIndex((c) => c.id === card.id);
     const op = index >= 0 ? 'update' : 'create';
     if (index >= 0) {
@@ -1025,6 +1067,17 @@ class StudyOSStorage {
   // Questions & Mistake Notebook (Exam Arena)
   // ==========================================
   public getQuestions(): Question[] {
+    if (this.subjects.length > 0 && this.questions.length < 15) {
+      for (const sub of this.subjects) {
+        const newQuestions = generateCuratedQuestionsForTopics(sub, sub.modules, '');
+        for (const nq of newQuestions) {
+          if (!this.questions.some((q) => q.prompt === nq.prompt)) {
+            this.questions.push(nq);
+          }
+        }
+      }
+      this.saveToStorage('study_os_questions', this.questions);
+    }
     return [...this.questions];
   }
 

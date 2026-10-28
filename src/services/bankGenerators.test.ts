@@ -1,6 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { generateCuratedQuestionsForTopics } from './questionBankGenerator';
-import { generateCuratedFlashcardsForTopics } from './flashcardBankGenerator';
+import {
+  generateCuratedQuestionsForTopics,
+  generateQuestionsForSingleTopic,
+  generateModuleMasteryQuestions,
+} from './questionBankGenerator';
+import {
+  generateCuratedFlashcardsForTopics,
+  generateFlashcardsForSingleTopic,
+  generateModuleMasteryCards,
+} from './flashcardBankGenerator';
+import { isCorruptFlashcard } from './storage';
 import { Subject, Module, FlashcardDeck } from '../types';
 
 describe('Question and Flashcard Bank Generators', () => {
@@ -196,5 +205,47 @@ describe('Question and Flashcard Bank Generators', () => {
     const nmapCard = cards.find((c) => c.front.includes('Nmap TCP SYN Stealth Scan'));
     expect(nmapCard).toBeDefined();
     expect(nmapCard?.back).toContain('Half-Open');
+  });
+
+  it('correctly filters out corrupted or placeholder flashcards via isCorruptFlashcard', () => {
+    expect(isCorruptFlashcard({ front: 'What is the core definition and mechanism of pdf ===?', back: 'A fundamental security concept in Ethical Hacking. Understanding this mechanism is essential for vulnerability discovery, mitigation analysis, and exam scenarios.' })).toBe(true);
+    expect(isCorruptFlashcard({ front: 'What is the core definition and mechanism of and security breaches in computers?', back: 'A fundamental security concept in Ethical Hacking. Understanding this mechanism is essential for vulnerability discovery, mitigation analysis, and exam scenarios.' })).toBe(true);
+    expect(isCorruptFlashcard({ front: '', back: '' })).toBe(true);
+    expect(isCorruptFlashcard({ front: 'Nmap TCP SYN Scan (-sS)', back: 'Sends SYN packets without ACK, half-open scan.' })).toBe(false);
+  });
+
+  it('automatically generates 3 targeted flashcards and 3 questions when a single topic completes', () => {
+    const topic = mockModules[1].chapters[0].topics[0]; // Nmap Port Scanning & Flags
+    const cards = generateFlashcardsForSingleTopic(mockSubject, mockDeck, topic);
+    expect(cards.length).toBe(3);
+    cards.forEach((c) => {
+      expect(c.topicId).toBe(topic.id);
+      expect(c.subjectId).toBe(mockSubject.id);
+      expect(c.front).not.toContain('pdf ===');
+    });
+
+    const questions = generateQuestionsForSingleTopic(mockSubject, topic);
+    expect(questions.length).toBe(3);
+    questions.forEach((q) => {
+      expect(q.topicId).toBe(topic.id);
+      expect(q.subjectId).toBe(mockSubject.id);
+      expect(q.options?.length).toBe(4);
+      expect(q.correctAnswer).toBeDefined();
+    });
+  });
+
+  it('automatically generates module synthesis cards and final mock exam questions upon 100% module completion', () => {
+    const mod = mockModules[0];
+    const modCards = generateModuleMasteryCards(mockSubject, mockDeck, mod);
+    expect(modCards.length).toBe(2);
+    expect(modCards[0].front).toContain('[Module Mastery]');
+
+    const modQuestions = generateModuleMasteryQuestions(mockSubject, mod);
+    expect(modQuestions.length).toBe(3);
+    modQuestions.forEach((q) => {
+      expect(q.subjectId).toBe(mockSubject.id);
+      expect(q.marks).toBeGreaterThanOrEqual(3);
+      expect(q.options?.length).toBe(4);
+    });
   });
 });
