@@ -1,0 +1,85 @@
+import React, { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { StudyOSProvider } from './context/StudyOSContext';
+import { Header } from './components/layout/Header';
+import { Sidebar } from './components/layout/Sidebar';
+import { MobileNav } from './components/layout/MobileNav';
+import { CommandPalette } from './components/layout/CommandPalette';
+import { HourlyCheckinModal } from './components/modals/HourlyCheckinModal';
+
+// Views
+import { CommandCenterView } from './views/CommandCenterView';
+import { LearningStudioView } from './views/LearningStudioView';
+import { ExamArenaView } from './views/ExamArenaView';
+import { MemoryLabView } from './views/MemoryLabView';
+import { RevisionCalendarView } from './views/RevisionCalendarView';
+import { DeadlinePlannerView } from './views/DeadlinePlannerView';
+import { FocusRoomView } from './views/FocusRoomView';
+import { TimeIntelligenceView } from './views/TimeIntelligenceView';
+import { WorkbenchView } from './views/WorkbenchView';
+import { ResourceLibraryView } from './views/ResourceLibraryView';
+import { AnalyticsView } from './views/AnalyticsView';
+import { SettingsView } from './views/SettingsView';
+
+const AppLayout: React.FC = () => {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  return (
+    <div className="flex h-screen w-screen overflow-hidden bg-slate-950 text-slate-100 font-sans">
+      {/* Sidebar for Desktop & Mobile Drawer */}
+      <Sidebar
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed(!collapsed)}
+        isMobileOpen={mobileOpen}
+        onCloseMobile={() => setMobileOpen(false)}
+      />
+
+      {/* Main Content Area */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Top Header */}
+        <Header onToggleSidebar={() => setMobileOpen(true)} />
+
+        {/* Scrollable View Area */}
+        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-8">
+          <Routes>
+            <Route path="/" element={<CommandCenterView />} />
+            <Route path="/learning" element={<LearningStudioView />} />
+            <Route path="/arena" element={<ExamArenaView />} />
+            <Route path="/memory" element={<MemoryLabView />} />
+            <Route path="/calendar" element={<RevisionCalendarView />} />
+            <Route path="/deadlines" element={<DeadlinePlannerView />} />
+            <Route path="/focus" element={<FocusRoomView />} />
+            <Route path="/time" element={<TimeIntelligenceView />} />
+            <Route path="/workbench" element={<WorkbenchView />} />
+            <Route path="/resources" element={<ResourceLibraryView />} />
+            <Route path="/analytics" element={<AnalyticsView />} />
+            <Route path="/settings" element={<SettingsView />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+
+        {/* Mobile Bottom Navigation */}
+        <MobileNav />
+      </div>
+
+      {/* Global Command Palette (Cmd+K) */}
+      <CommandPalette />
+
+      {/* Hourly Check-in Prompt Modal */}
+      <HourlyCheckinModal />
+    </div>
+  );
+};
+
+export function App() {
+  return (
+    <BrowserRouter>
+      <StudyOSProvider>
+        <AppLayout />
+      </StudyOSProvider>
+    </BrowserRouter>
+  );
+}
+
+export default App;

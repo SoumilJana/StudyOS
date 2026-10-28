@@ -1,0 +1,444 @@
+import React, { useState } from 'react';
+import {
+  GraduationCap,
+  Sparkles,
+  BookOpen,
+  HelpCircle,
+  CheckCircle2,
+  BrainCircuit,
+  Swords,
+  ChevronRight,
+  Upload,
+  FileText,
+  AlertCircle,
+  ArrowRight,
+  Check,
+} from 'lucide-react';
+import { useStudyOS } from '../context/StudyOSContext';
+import { aiService, TutoringResponse } from '../services/aiService';
+import { storage } from '../services/storage';
+
+export const LearningStudioView: React.FC = () => {
+  const { subjects, settings } = useStudyOS();
+
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
+  const [selectedTopicId, setSelectedTopicId] = useState<string>('top-raft-safety');
+  const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
+  const [tutoringData, setTutoringData] = useState<TutoringResponse | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [userSelectedOption, setUserSelectedOption] = useState<number | null>(null);
+  const [showExplanation, setShowExplanation] = useState<boolean>(false);
+  const [flashcardsCreated, setFlashcardsCreated] = useState<boolean>(false);
+  const [questionsCreated, setQuestionsCreated] = useState<boolean>(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+
+  const selectedSubject = subjects.find((s) => s.id === selectedSubjectId);
+
+  // Find selected chapter and topic
+  let currentChapter: any = null;
+  let currentTopic: any = null;
+  if (selectedSubject) {
+    for (const mod of selectedSubject.modules) {
+      for (const chap of mod.chapters) {
+        const found = chap.topics.find((t) => t.id === selectedTopicId);
+        if (found) {
+          currentChapter = chap;
+          currentTopic = found;
+          break;
+        }
+      }
+    }
+  }
+
+  // Fetch or trigger step
+  const handleTeachStep = async (stepIdx: number) => {
+    if (!currentTopic || !currentChapter) return;
+    setLoading(true);
+    setCurrentStepIndex(stepIdx);
+    setUserSelectedOption(null);
+    setShowExplanation(false);
+    setFlashcardsCreated(false);
+    setQuestionsCreated(false);
+
+    try {
+      const response = await aiService.explainChapterTopic(
+        currentChapter.title,
+        currentTopic.title,
+        stepIdx,
+        settings,
+        uploadedFileName ? `Document excerpt: ${uploadedFileName}` : undefined
+      );
+      setTutoringData(response);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initial load
+  React.useEffect(() => {
+    if (currentTopic && !tutoringData && !loading) {
+      handleTeachStep(0);
+    }
+  }, [currentTopic]);
+
+  const handleOptionSelect = (idx: number) => {
+    if (userSelectedOption !== null) return;
+    setUserSelectedOption(idx);
+    setShowExplanation(true);
+
+    if (tutoringData && idx === tutoringData.retrievalQuestion.correctIndex) {
+      storage.addXP(25, 'Answered retrieval checkpoint correctly');
+      // Update topic mastery
+      if (selectedSubject && currentTopic) {
+        storage.updateTopicMastery(selectedSubject.id, currentTopic.id, {
+          isUnderstood: true,
+          isStudied: true,
+          practiceQuestionsAttempted: currentTopic.practiceQuestionsAttempted + 1,
+          practiceQuestionsCorrect: currentTopic.practiceQuestionsCorrect + 1,
+        });
+      }
+    } else {
+      if (selectedSubject && currentTopic) {
+        storage.updateTopicMastery(selectedSubject.id, currentTopic.id, {
+          isStudied: true,
+          practiceQuestionsAttempted: currentTopic.practiceQuestionsAttempted + 1,
+        });
+      }
+    }
+  };
+
+  const handleGenerateCards = async () => {
+    if (!selectedSubject || !currentTopic) return;
+    const cards = await aiService.generateFlashcards(selectedSubject.name, currentTopic.title, 3);
+    cards.forEach((c) => {
+      storage.saveFlashcard({
+        ...c,
+        id: `fc-gen-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        subjectId: selectedSubject.id,
+        topicId: currentTopic.id,
+        createdAt: new Date().toISOString(),
+        reviewHistory: [],
+      });
+    });
+    setFlashcardsCreated(true);
+    storage.addXP(20, 'Generated topic flashcards');
+  };
+
+  const handleGenerateQuestions = async () => {
+    if (!selectedSubject || !currentTopic) return;
+    const questions = await aiService.generateQuestions(selectedSubject.name, currentTopic.title, 3);
+    questions.forEach((q) => {
+      storage.saveQuestion({
+        ...q,
+        subjectId: selectedSubject.id,
+        topicId: currentTopic.id,
+      });
+    });
+    setQuestionsCreated(true);
+    storage.addXP(20, 'Generated practice questions');
+  };
+
+  const stepLabels = [
+    '1. Mental Model',
+    '2. Core Mechanics',
+    '3. Derivations',
+    '4. Exam Traps',
+    '5. Failure Modes',
+    '6. Recall Checkpoint',
+  ];
+
+  return (
+    <div className="space-y-6 pb-12">
+      {/* Header & Subject Picker */}
+      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+            AI Learning Studio
+          </h1>
+          <p className="mt-1 text-xs text-slate-400 sm:text-sm">
+            Interactive cognitive tutoring grounded in your documents, structured across active recall checkpoints.
+          </p>
+        </div>
+
+        {/* Subject dropdown */}
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedSubjectId}
+            onChange={(e) => {
+              setSelectedSubjectId(e.target.value);
+              const sub = subjects.find((s) => s.id === e.target.value);
+              const firstTop = sub?.modules[0]?.chapters[0]?.topics[0];
+              if (firstTop) setSelectedTopicId(firstTop.id);
+            }}
+            className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 text-xs font-semibold text-slate-200 outline-none focus:border-indigo-500"
+          >
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.code}: {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Main Grid: Left Navigation Tree (Syllabus & Documents), Right Active Tutor Workspace */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+        {/* Left Column: Syllabus Hierarchy & Document Upload */}
+        <div className="space-y-4 lg:col-span-1">
+          {/* Document Attachment Widget */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Source Document Grounding
+            </span>
+            <div className="mt-2.5">
+              <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-slate-700 bg-slate-950/40 p-3 text-center transition-colors hover:border-indigo-500 hover:bg-slate-900">
+                <Upload className="h-5 w-5 text-indigo-400" />
+                <span className="mt-1 text-xs font-medium text-slate-300">
+                  {uploadedFileName || 'Drop PDF, DOCX, or Notes'}
+                </span>
+                <span className="text-[10px] text-slate-500">Auto-parsed for retrieval</span>
+                <input
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setUploadedFileName(file.name);
+                      storage.createNotification({
+                        title: 'Document Uploaded',
+                        message: `Parsed ${file.name}. Tutor will now ground explanations in source text.`,
+                        category: 'system',
+                      });
+                    }
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Chapters & Topics Selector */}
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Syllabus Hierarchy
+            </span>
+
+            <div className="mt-3 space-y-4">
+              {selectedSubject?.modules.map((mod) => (
+                <div key={mod.id} className="space-y-2">
+                  <div className="text-xs font-bold text-indigo-300">{mod.title}</div>
+                  {mod.chapters.map((chap) => (
+                    <div key={chap.id} className="pl-2 space-y-1">
+                      <div className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
+                        <BookOpen className="h-3 w-3" />
+                        <span className="truncate">{chap.title}</span>
+                      </div>
+                      <div className="pl-3 space-y-1">
+                        {chap.topics.map((t) => {
+                          const isSelected = t.id === selectedTopicId;
+                          return (
+                            <button
+                              key={t.id}
+                              onClick={() => {
+                                setSelectedTopicId(t.id);
+                                handleTeachStep(0);
+                              }}
+                              className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition-all ${
+                                isSelected
+                                  ? 'bg-indigo-600/20 text-indigo-300 font-semibold border-l-2 border-indigo-500'
+                                  : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                              }`}
+                            >
+                              <span className="truncate">{t.title}</span>
+                              <span className="rounded bg-slate-800 px-1 py-0.5 text-[9px] font-mono text-slate-400">
+                                {t.masteryScore}%
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right 3 Cols: Active Tutoring Studio */}
+        <div className="space-y-6 lg:col-span-3">
+          {/* Step Progression Bar */}
+          <div className="flex flex-wrap items-center gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/50 p-2.5">
+            {stepLabels.map((lbl, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleTeachStep(idx)}
+                className={`flex-1 rounded-xl px-2.5 py-1.5 text-xs font-medium transition-all ${
+                  currentStepIndex === idx
+                    ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
+                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                }`}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
+
+          {/* Topic Detail Header */}
+          {currentTopic && (
+            <div className="flex flex-col justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 sm:flex-row sm:items-center">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-indigo-500/20 px-2 py-0.5 text-[10px] font-mono font-bold text-indigo-300 uppercase">
+                    {currentTopic.importance} Priority
+                  </span>
+                  <span className="text-xs text-slate-400">
+                    Difficulty: {currentTopic.difficulty}/5 • ~{currentTopic.estimatedMinutes}m duration
+                  </span>
+                </div>
+                <h2 className="mt-1 text-xl font-bold text-white">{currentTopic.title}</h2>
+              </div>
+
+              {/* Instant Synthesis Actions */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleGenerateCards}
+                  disabled={flashcardsCreated}
+                  className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all ${
+                    flashcardsCreated
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                      : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
+                  }`}
+                >
+                  <BrainCircuit className="h-3.5 w-3.5" />
+                  <span>{flashcardsCreated ? 'Cards Added!' : 'Gen Flashcards'}</span>
+                </button>
+
+                <button
+                  onClick={handleGenerateQuestions}
+                  disabled={questionsCreated}
+                  className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all ${
+                    questionsCreated
+                      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                      : 'border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700'
+                  }`}
+                >
+                  <Swords className="h-3.5 w-3.5" />
+                  <span>{questionsCreated ? 'Questions Added!' : 'Gen Practice Qs'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Explanation Content Box */}
+          {loading ? (
+            <div className="flex h-64 items-center justify-center rounded-2xl border border-slate-800 bg-slate-900/40">
+              <div className="flex flex-col items-center gap-2 text-slate-400">
+                <Sparkles className="h-6 w-6 animate-spin text-indigo-400" />
+                <span className="text-xs">Synthesizing stage breakdown and active retrieval...</span>
+              </div>
+            </div>
+          ) : tutoringData ? (
+            <div className="space-y-6">
+              {/* Markdown Content Area */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 leading-relaxed">
+                <div className="prose prose-invert max-w-none text-xs sm:text-sm text-slate-300 space-y-4">
+                  {tutoringData.explanation.split('\n\n').map((paragraph, i) => (
+                    <p key={i}>{paragraph}</p>
+                  ))}
+                </div>
+
+                {/* Key Formulas / Definitions Box */}
+                {tutoringData.keyFormulasOrDefinitions.length > 0 && (
+                  <div className="mt-5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-4">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-300">
+                      Core Formulas & Axioms
+                    </span>
+                    <ul className="mt-2 space-y-1.5 text-xs text-indigo-200 font-mono">
+                      {tutoringData.keyFormulasOrDefinitions.map((f, idx) => (
+                        <li key={idx} className="flex items-center gap-2">
+                          <span className="text-indigo-400">•</span>
+                          <span>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Exam Tip Alert */}
+                {tutoringData.examTip && (
+                  <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-200">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                    <div>
+                      <span className="font-bold">High-Yield Exam Pointer: </span>
+                      <span>{tutoringData.examTip}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Active Retrieval Checkpoint Question */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-indigo-400">
+                  <HelpCircle className="h-4 w-4" />
+                  <span>Cognitive Retrieval Checkpoint</span>
+                </div>
+                <h3 className="mt-2 text-sm sm:text-base font-bold text-white">
+                  {tutoringData.retrievalQuestion.prompt}
+                </h3>
+
+                <div className="mt-4 space-y-2">
+                  {tutoringData.retrievalQuestion.options.map((opt, idx) => {
+                    const isSelected = userSelectedOption === idx;
+                    const isCorrect = idx === tutoringData.retrievalQuestion.correctIndex;
+                    let style = 'border-slate-800 bg-slate-950/60 text-slate-300 hover:border-slate-700';
+
+                    if (userSelectedOption !== null) {
+                      if (isCorrect) {
+                        style = 'border-emerald-500/50 bg-emerald-500/20 text-emerald-200 font-semibold';
+                      } else if (isSelected) {
+                        style = 'border-rose-500/50 bg-rose-500/20 text-rose-200';
+                      }
+                    }
+
+                    return (
+                      <button
+                        key={idx}
+                        onClick={() => handleOptionSelect(idx)}
+                        disabled={userSelectedOption !== null}
+                        className={`flex w-full items-center justify-between rounded-xl border p-3 text-left text-xs transition-all ${style}`}
+                      >
+                        <span>{opt}</span>
+                        {userSelectedOption !== null && isCorrect && (
+                          <Check className="h-4 w-4 text-emerald-400 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Explanation on Answer */}
+                {showExplanation && (
+                  <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-xs text-slate-300 animate-in fade-in">
+                    <span className="font-bold text-white">Explanation: </span>
+                    <span>{tutoringData.retrievalQuestion.explanation}</span>
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={() => handleTeachStep((currentStepIndex + 1) % stepLabels.length)}
+                        className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500"
+                      >
+                        <span>Next Learning Stage</span>
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+};
