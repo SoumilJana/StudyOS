@@ -65,6 +65,10 @@ describe('Study OS Core Storage & Calculation Engines', () => {
   });
 
   describe('Spaced Repetition Algorithm (SM-2 Matrix)', () => {
+    beforeEach(() => {
+      storage.loadDemoData();
+    });
+
     it('resets interval and increments lapses on Again rating', () => {
       const cards = storage.getFlashcards();
       const card = cards[0];
@@ -92,6 +96,10 @@ describe('Study OS Core Storage & Calculation Engines', () => {
   });
 
   describe('Time Intelligence & Reconciliation', () => {
+    beforeEach(() => {
+      storage.loadDemoData();
+    });
+
     it('prevents double counting when a Pomodoro focus session is linked to a time log', () => {
       const initialLogs = storage.getTimeLogs();
       const pomodoroCount = initialLogs.filter((l) => l.linkedFocusSessionId).length;

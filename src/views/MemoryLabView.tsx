@@ -29,8 +29,14 @@ export const MemoryLabView: React.FC = () => {
   const [newFront, setNewFront] = useState('');
   const [newBack, setNewBack] = useState('');
   const [newFormat, setNewFormat] = useState<CardFormat>('concept');
-  const [newDeckId, setNewDeckId] = useState<string>(decks[0]?.id || 'deck-raft');
+  const [newDeckId, setNewDeckId] = useState<string>(decks[0]?.id || '');
   const [newSourceRef, setNewSourceRef] = useState('');
+
+  React.useEffect(() => {
+    if (!newDeckId && decks.length > 0) {
+      setNewDeckId(decks[0].id);
+    }
+  }, [decks, newDeckId]);
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -65,9 +71,26 @@ export const MemoryLabView: React.FC = () => {
     e.preventDefault();
     if (!newFront || !newBack) return;
 
+    let targetDeckId = newDeckId;
+    if (!targetDeckId) {
+      if (decks.length > 0) {
+        targetDeckId = decks[0].id;
+      } else {
+        const defaultDeck = {
+          id: `deck-${Date.now()}`,
+          title: 'General Study Deck',
+          description: 'Spaced repetition flashcards',
+          color: '#6366f1',
+          createdAt: new Date().toISOString(),
+        };
+        storage.saveDeck(defaultDeck);
+        targetDeckId = defaultDeck.id;
+      }
+    }
+
     const newCard: Flashcard = {
       id: `fc-${Date.now()}`,
-      deckId: newDeckId,
+      deckId: targetDeckId,
       front: newFront,
       back: newBack,
       format: newFormat,
@@ -236,36 +259,46 @@ export const MemoryLabView: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {decks.map((deck) => {
-              const deckCards = flashcards.filter((c) => c.deckId === deck.id);
-              const deckDue = deckCards.filter((c) => c.dueDate <= today).length;
-              return (
-                <div
-                  key={deck.id}
-                  className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 transition-all hover:border-slate-700"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-white truncate">{deck.title}</span>
-                    <span
-                      className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: deck.color || '#6366f1' }}
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-slate-400 line-clamp-2">{deck.description}</p>
+            {decks.length === 0 ? (
+              <div className="col-span-3 rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-8 text-center">
+                <BrainCircuit className="mx-auto h-8 w-8 text-indigo-400/60" />
+                <h4 className="mt-3 text-sm font-bold text-white">No Flashcard Decks Yet</h4>
+                <p className="mt-1 text-xs text-slate-400 max-w-sm mx-auto">
+                  Decks will be generated automatically when you import a syllabus, or you can create individual cards using the "Add Flashcard" button above.
+                </p>
+              </div>
+            ) : (
+              decks.map((deck) => {
+                const deckCards = flashcards.filter((c) => c.deckId === deck.id);
+                const deckDue = deckCards.filter((c) => c.dueDate <= today).length;
+                return (
+                  <div
+                    key={deck.id}
+                    className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 transition-all hover:border-slate-700"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white truncate">{deck.title}</span>
+                      <span
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: deck.color || '#6366f1' }}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400 line-clamp-2">{deck.description}</p>
 
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-800/80 pt-3 text-xs">
-                    <span className="text-slate-400">{deckCards.length} total cards</span>
-                    {deckDue > 0 ? (
-                      <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-                        {deckDue} due today
-                      </span>
-                    ) : (
-                      <span className="text-emerald-400 text-[11px]">All caught up</span>
-                    )}
+                    <div className="mt-4 flex items-center justify-between border-t border-slate-800/80 pt-3 text-xs">
+                      <span className="text-slate-400">{deckCards.length} total cards</span>
+                      {deckDue > 0 ? (
+                        <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">
+                          {deckDue} due today
+                        </span>
+                      ) : (
+                        <span className="text-emerald-400 text-[11px]">All caught up</span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       )}

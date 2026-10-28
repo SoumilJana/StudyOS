@@ -162,9 +162,16 @@ export const SettingsView: React.FC = () => {
   };
 
   const handleReset = () => {
-    if (confirm('Are you sure you want to reset all data back to original defaults?')) {
+    if (confirm('Are you sure you want to clear all data and start with a completely clean slate?')) {
       storage.resetToDefault();
-      alert('Data reset successfully.');
+      window.location.reload();
+    }
+  };
+
+  const handleLoadDemo = () => {
+    if (confirm('Load sample curriculum and study data for demonstration?')) {
+      storage.loadDemoData();
+      window.location.reload();
     }
   };
 
@@ -804,11 +811,20 @@ export const SettingsView: React.FC = () => {
 
           <button
             type="button"
+            onClick={handleLoadDemo}
+            className="flex items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-4 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span>Load Sample Demo Data</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleReset}
             className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 ml-auto"
           >
             <RotateCcw className="h-4 w-4" />
-            <span>Reset Demo Data</span>
+            <span>Wipe All Data (Fresh Clean Slate)</span>
           </button>
         </div>
       </div>

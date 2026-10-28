@@ -39,6 +39,112 @@ import {
 
 type Listener = () => void;
 
+export const DEFAULT_FRESH_USER_SETTINGS: UserSettings = {
+  userName: 'Student',
+  avatarSeed: 'scholar-1',
+  theme: 'dark',
+  dailyFocusTargetMinutes: 180,
+  pomodoroWorkMinutes: 50,
+  pomodoroBreakMinutes: 10,
+  hourlyCheckinEnabled: true,
+  quietHoursStart: '22:00',
+  quietHoursEnd: '07:30',
+  enableBrowserNotifications: false,
+  aiProvider: 'openrouter',
+  aiModel: 'google/gemma-4-31b-it:free',
+  dashboardWidgets: {
+    heroAction: true,
+    quickStats: true,
+    streakXp: true,
+    dueRevisions: true,
+    nearestDeadlines: true,
+    weakTopics: true,
+    todayTasks: true,
+    timeAllocation: true,
+    weeklyTrends: true,
+  },
+};
+
+export const DEFAULT_FRESH_GAMIFICATION: GamificationState = {
+  xp: 0,
+  level: 1,
+  rank: 'Initiate',
+  currentStreak: 0,
+  longestStreak: 0,
+  lastActiveDate: new Date().toISOString().split('T')[0],
+  streakFreezeAvailable: 1,
+  missions: [
+    {
+      id: 'm-daily-focus',
+      title: 'Daily Deep Focus',
+      description: 'Log at least 90 minutes of focused study time today.',
+      xpReward: 50,
+      type: 'daily',
+      progress: 0,
+      maxProgress: 90,
+      completed: false,
+    },
+    {
+      id: 'm-daily-cards',
+      title: 'Spaced Repetition Blitz',
+      description: 'Review 10 flashcards in Memory Lab.',
+      xpReward: 40,
+      type: 'daily',
+      progress: 0,
+      maxProgress: 10,
+      completed: false,
+    },
+    {
+      id: 'm-practice-questions',
+      title: 'Exam Arena Retrieval',
+      description: 'Complete 3 practice questions or exam drills.',
+      xpReward: 60,
+      type: 'daily',
+      progress: 0,
+      maxProgress: 3,
+      completed: false,
+    },
+  ],
+  achievements: [
+    {
+      id: 'ach-genesis',
+      title: 'Genesis Scholar',
+      description: 'Import your first course syllabus or learning materials.',
+      icon: 'BookOpen',
+      category: 'mastery',
+      progress: 0,
+      maxProgress: 1,
+    },
+    {
+      id: 'ach-focus-novice',
+      title: 'Focus Novice',
+      description: 'Complete your first Pomodoro focus session.',
+      icon: 'Timer',
+      category: 'focus',
+      progress: 0,
+      maxProgress: 1,
+    },
+    {
+      id: 'ach-first-exam',
+      title: 'Arena Contender',
+      description: 'Complete your first practice exam or question drill.',
+      icon: 'Award',
+      category: 'grit',
+      progress: 0,
+      maxProgress: 1,
+    },
+    {
+      id: 'ach-streak-3',
+      title: 'Three-Day Momentum',
+      description: 'Maintain a 3-day active study streak.',
+      icon: 'Flame',
+      category: 'consistency',
+      progress: 0,
+      maxProgress: 3,
+    },
+  ],
+};
+
 class StudyOSStorage {
   private listeners: Set<Listener> = new Set();
 
@@ -54,8 +160,8 @@ class StudyOSStorage {
   private timeLogs: TimeLog[] = [];
   private focusSessions: FocusSession[] = [];
   private hourlyCheckins: HourlyCheckin[] = [];
-  private gamification: GamificationState = INITIAL_GAMIFICATION;
-  private settings: UserSettings = INITIAL_USER_SETTINGS;
+  private gamification: GamificationState = DEFAULT_FRESH_GAMIFICATION;
+  private settings: UserSettings = DEFAULT_FRESH_USER_SETTINGS;
   private notifications: AppNotification[] = [];
   private resources: Resource[] = [];
 
@@ -65,46 +171,41 @@ class StudyOSStorage {
 
   private init() {
     try {
-      this.subjects = this.loadFromStorage('study_os_subjects', INITIAL_SUBJECTS);
-      this.deadlines = this.loadFromStorage('study_os_deadlines', INITIAL_DEADLINES);
-      this.projects = this.loadFromStorage('study_os_projects', INITIAL_PROJECTS);
-      this.tasks = this.loadFromStorage('study_os_tasks', INITIAL_TASKS);
-      this.decks = this.loadFromStorage('study_os_decks', INITIAL_DECKS);
-      this.flashcards = this.loadFromStorage('study_os_flashcards', INITIAL_FLASHCARDS);
-      this.questions = this.loadFromStorage('study_os_questions', INITIAL_QUESTIONS);
-      this.mistakes = this.loadFromStorage('study_os_mistakes', INITIAL_MISTAKES);
-      this.revisions = this.loadFromStorage('study_os_revisions', INITIAL_REVISIONS);
-      this.timeLogs = this.loadFromStorage('study_os_time_logs', INITIAL_TIME_LOGS);
-      this.focusSessions = this.loadFromStorage('study_os_focus_sessions', INITIAL_FOCUS_SESSIONS);
+      const storageVersion = typeof localStorage !== 'undefined' ? localStorage.getItem('study_os_version') : null;
+      const CURRENT_VERSION = 'v3_fresh_clean_user';
+
+      if (typeof localStorage !== 'undefined' && storageVersion !== CURRENT_VERSION) {
+        localStorage.clear();
+        localStorage.setItem('study_os_version', CURRENT_VERSION);
+      }
+
+      this.subjects = this.loadFromStorage('study_os_subjects', []);
+      this.deadlines = this.loadFromStorage('study_os_deadlines', []);
+      this.projects = this.loadFromStorage('study_os_projects', []);
+      this.tasks = this.loadFromStorage('study_os_tasks', []);
+      this.decks = this.loadFromStorage('study_os_decks', []);
+      this.flashcards = this.loadFromStorage('study_os_flashcards', []);
+      this.questions = this.loadFromStorage('study_os_questions', []);
+      this.mistakes = this.loadFromStorage('study_os_mistakes', []);
+      this.revisions = this.loadFromStorage('study_os_revisions', []);
+      this.timeLogs = this.loadFromStorage('study_os_time_logs', []);
+      this.focusSessions = this.loadFromStorage('study_os_focus_sessions', []);
       this.hourlyCheckins = this.loadFromStorage('study_os_hourly_checkins', []);
-      this.gamification = this.loadFromStorage('study_os_gamification', INITIAL_GAMIFICATION);
-      this.settings = this.loadFromStorage('study_os_settings', INITIAL_USER_SETTINGS);
-      this.notifications = this.loadFromStorage('study_os_notifications', INITIAL_NOTIFICATIONS);
-      this.resources = this.loadFromStorage('study_os_resources', INITIAL_RESOURCES);
-
-      // Ensure Ethical Hacking course is loaded
-      if (!this.subjects.some((s) => s.id === 'sub-eh701')) {
-        const eh = INITIAL_SUBJECTS.find((s) => s.id === 'sub-eh701');
-        if (eh) {
-          this.subjects.unshift(eh);
-          this.saveToStorage('study_os_subjects', this.subjects);
-        }
-      }
-
-      // Ensure Ethical Hacking deadline is loaded
-      if (!this.deadlines.some((d) => d.id === 'dl-eh701-mid')) {
-        const ehDl = INITIAL_DEADLINES.find((d) => d.id === 'dl-eh701-mid');
-        if (ehDl) {
-          this.deadlines.unshift(ehDl);
-          this.saveToStorage('study_os_deadlines', this.deadlines);
-        }
-      }
-
-      // Ensure Ethical Hacking resources are loaded
-      if (this.resources.length === 0 && INITIAL_RESOURCES.length > 0) {
-        this.resources = INITIAL_RESOURCES;
-        this.saveToStorage('study_os_resources', this.resources);
-      }
+      this.gamification = this.loadFromStorage('study_os_gamification', DEFAULT_FRESH_GAMIFICATION);
+      this.settings = this.loadFromStorage('study_os_settings', DEFAULT_FRESH_USER_SETTINGS);
+      this.notifications = this.loadFromStorage('study_os_notifications', [
+        {
+          id: 'notif-welcome',
+          title: 'Welcome to Study OS! 🎓',
+          message: 'Upload your syllabus PDF or course materials to automatically generate your study modules and exam roadmap.',
+          category: 'system',
+          scheduledFor: new Date().toISOString(),
+          read: false,
+          deduplicationKey: 'welcome-first-time-user',
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      this.resources = this.loadFromStorage('study_os_resources', []);
 
       // Verify streak and day-boundary maintenance
       this.verifyDailyStreak();
@@ -252,7 +353,7 @@ class StudyOSStorage {
           category: 'gamification',
         });
       } else {
-        this.gamification.currentStreak = 1;
+        this.gamification.currentStreak = 0;
         this.gamification.lastActiveDate = today;
       }
     }
@@ -926,12 +1027,77 @@ class StudyOSStorage {
     }
   }
 
+  private saveAll(): void {
+    this.saveToStorage('study_os_subjects', this.subjects);
+    this.saveToStorage('study_os_deadlines', this.deadlines);
+    this.saveToStorage('study_os_projects', this.projects);
+    this.saveToStorage('study_os_tasks', this.tasks);
+    this.saveToStorage('study_os_decks', this.decks);
+    this.saveToStorage('study_os_flashcards', this.flashcards);
+    this.saveToStorage('study_os_questions', this.questions);
+    this.saveToStorage('study_os_mistakes', this.mistakes);
+    this.saveToStorage('study_os_revisions', this.revisions);
+    this.saveToStorage('study_os_time_logs', this.timeLogs);
+    this.saveToStorage('study_os_focus_sessions', this.focusSessions);
+    this.saveToStorage('study_os_hourly_checkins', this.hourlyCheckins);
+    this.saveToStorage('study_os_gamification', this.gamification);
+    this.saveToStorage('study_os_settings', this.settings);
+    this.saveToStorage('study_os_notifications', this.notifications);
+    this.saveToStorage('study_os_resources', this.resources);
+  }
+
   public resetToDefault(): void {
     if (typeof localStorage !== 'undefined') {
       localStorage.clear();
+      localStorage.setItem('study_os_version', 'v3_fresh_clean_user');
     }
     this.memoryStore.clear();
-    this.init();
+    this.subjects = [];
+    this.deadlines = [];
+    this.projects = [];
+    this.tasks = [];
+    this.decks = [];
+    this.flashcards = [];
+    this.questions = [];
+    this.mistakes = [];
+    this.revisions = [];
+    this.timeLogs = [];
+    this.focusSessions = [];
+    this.hourlyCheckins = [];
+    this.resources = [];
+    this.gamification = JSON.parse(JSON.stringify(DEFAULT_FRESH_GAMIFICATION));
+    this.settings = JSON.parse(JSON.stringify(DEFAULT_FRESH_USER_SETTINGS));
+    this.notifications = [
+      {
+        id: `notif-${Date.now()}`,
+        title: 'Welcome to Study OS! 🎓',
+        message: 'Upload your syllabus PDF or course materials to begin.',
+        category: 'system',
+        scheduledFor: new Date().toISOString(),
+        read: false,
+        deduplicationKey: 'welcome-reset-clean',
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    this.saveAll();
+    this.notify();
+  }
+
+  public loadDemoData(): void {
+    this.subjects = JSON.parse(JSON.stringify(INITIAL_SUBJECTS));
+    this.deadlines = JSON.parse(JSON.stringify(INITIAL_DEADLINES));
+    this.projects = JSON.parse(JSON.stringify(INITIAL_PROJECTS));
+    this.tasks = JSON.parse(JSON.stringify(INITIAL_TASKS));
+    this.decks = JSON.parse(JSON.stringify(INITIAL_DECKS));
+    this.flashcards = JSON.parse(JSON.stringify(INITIAL_FLASHCARDS));
+    this.questions = JSON.parse(JSON.stringify(INITIAL_QUESTIONS));
+    this.mistakes = JSON.parse(JSON.stringify(INITIAL_MISTAKES));
+    this.revisions = JSON.parse(JSON.stringify(INITIAL_REVISIONS));
+    this.timeLogs = JSON.parse(JSON.stringify(INITIAL_TIME_LOGS));
+    this.focusSessions = JSON.parse(JSON.stringify(INITIAL_FOCUS_SESSIONS));
+    this.gamification = JSON.parse(JSON.stringify(INITIAL_GAMIFICATION));
+    this.resources = JSON.parse(JSON.stringify(INITIAL_RESOURCES));
+    this.saveAll();
     this.notify();
   }
 }

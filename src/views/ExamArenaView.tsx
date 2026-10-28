@@ -88,6 +88,10 @@ export const ExamArenaView: React.FC = () => {
 
   const startPractice = (mode: 'topic' | 'mixed' | 'weak' | 'mock') => {
     let pool = [...questions];
+    if (pool.length === 0) {
+      alert('No practice questions available yet. Import your syllabus on the Command Center or generate questions in Learning Studio first!');
+      return;
+    }
     if (mode === 'weak' && weakTopics.length > 0) {
       const weakIds = weakTopics.map((w) => w.topicId);
       const filtered = pool.filter((q) => q.topicId && weakIds.includes(q.topicId));
@@ -261,6 +265,15 @@ export const ExamArenaView: React.FC = () => {
         !isTestRunning && !testCompleted ? (
           /* Arena Mode Selection Grid */
           <div className="space-y-6">
+            {questions.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-indigo-500/30 bg-indigo-950/20 p-5 text-center">
+                <Swords className="mx-auto h-7 w-7 text-indigo-400" />
+                <h3 className="mt-2 text-sm font-bold text-white">Exam Arena Question Bank is Fresh & Clean</h3>
+                <p className="mt-1 text-xs text-slate-400 max-w-md mx-auto">
+                  Import your course syllabus on the Command Center to automatically extract topics, or generate instant practice questions from any lecture PDF in Learning Studio.
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {/* Mode 1: Weak Topics Drill */}
               <div

@@ -26,7 +26,7 @@ export const LearningStudioView: React.FC = () => {
   const { subjects, settings, resources } = useStudyOS();
 
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
-  const [selectedTopicId, setSelectedTopicId] = useState<string>('top-raft-safety');
+  const [selectedTopicId, setSelectedTopicId] = useState<string>('');
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [tutoringData, setTutoringData] = useState<TutoringResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -37,6 +37,22 @@ export const LearningStudioView: React.FC = () => {
   const [questionsCreated, setQuestionsCreated] = useState<boolean>(false);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [groundingText, setGroundingText] = useState<string>('');
+
+  useEffect(() => {
+    if (!selectedSubjectId && subjects.length > 0) {
+      setSelectedSubjectId(subjects[0].id);
+    }
+  }, [subjects, selectedSubjectId]);
+
+  useEffect(() => {
+    const sel = subjects.find((s) => s.id === selectedSubjectId);
+    if (sel) {
+      const firstTopic = sel.modules[0]?.chapters[0]?.topics[0];
+      if (firstTopic && (!selectedTopicId || !sel.modules.some((m) => m.chapters.some((c) => c.topics.some((t) => t.id === selectedTopicId))))) {
+        setSelectedTopicId(firstTopic.id);
+      }
+    }
+  }, [selectedSubjectId, subjects, selectedTopicId]);
 
   useEffect(() => {
     const cachedText = sessionStorage.getItem('study_os_active_grounding_text');
@@ -556,6 +572,18 @@ export const LearningStudioView: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          ) : !currentTopic ? (
+            <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 p-12 text-center">
+              <GraduationCap className="mx-auto h-10 w-10 text-slate-600" />
+              <h3 className="mt-3 text-sm font-bold text-white">
+                {subjects.length === 0 ? 'No Courses Enrolled Yet' : 'Select a Topic to Start Learning'}
+              </h3>
+              <p className="mt-1 text-xs text-slate-400 max-w-sm mx-auto">
+                {subjects.length === 0
+                  ? 'Import your course syllabus PDF on the Command Center to automatically populate your modules and begin AI-guided study.'
+                  : 'Pick a module or topic from the left sidebar, or upload lecture notes above to start interactive AI tutoring.'}
+              </p>
             </div>
           ) : null}
         </div>

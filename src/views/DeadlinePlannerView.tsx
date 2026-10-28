@@ -132,40 +132,46 @@ export const DeadlinePlannerView: React.FC = () => {
           </span>
 
           <div className="space-y-2.5">
-            {deadlines.map((d) => {
-              const isSelected = selectedDeadline?.id === d.id;
-              const diffDays = Math.ceil((new Date(d.dueDate).getTime() - Date.now()) / (1000 * 3600 * 24));
-              return (
-                <div
-                  key={d.id}
-                  onClick={() => setSelectedDeadline(d)}
-                  className={`cursor-pointer rounded-2xl border p-4 transition-all ${
-                    isSelected
-                      ? 'border-indigo-500 bg-indigo-600/10 shadow-md'
-                      : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-900'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono font-bold uppercase text-slate-400">
-                      {d.category}
-                    </span>
-                    <span
-                      className={`text-xs font-bold font-mono ${
-                        diffDays <= 7 ? 'text-rose-400' : 'text-slate-300'
-                      }`}
-                    >
-                      {diffDays > 0 ? `${diffDays} days left` : 'Today!'}
-                    </span>
-                  </div>
+            {deadlines.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-6 text-center text-xs text-slate-500">
+                No deadlines tracked yet. Click "+ Add Deadline" or import your course syllabus.
+              </div>
+            ) : (
+              deadlines.map((d) => {
+                const isSelected = selectedDeadline?.id === d.id;
+                const diffDays = Math.ceil((new Date(d.dueDate).getTime() - Date.now()) / (1000 * 3600 * 24));
+                return (
+                  <div
+                    key={d.id}
+                    onClick={() => setSelectedDeadline(d)}
+                    className={`cursor-pointer rounded-2xl border p-4 transition-all ${
+                      isSelected
+                        ? 'border-indigo-500 bg-indigo-600/10 shadow-md'
+                        : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-900'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono font-bold uppercase text-slate-400">
+                        {d.category}
+                      </span>
+                      <span
+                        className={`text-xs font-bold font-mono ${
+                          diffDays <= 7 ? 'text-rose-400' : 'text-slate-300'
+                        }`}
+                      >
+                        {diffDays > 0 ? `${diffDays} days left` : 'Today!'}
+                      </span>
+                    </div>
 
-                  <h3 className="mt-2 text-sm font-bold text-white truncate">{d.title}</h3>
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-                    <span>{d.estimatedWorkloadHours}h estimated</span>
-                    <span className="capitalize">{d.priority} priority</span>
+                    <h3 className="mt-2 text-sm font-bold text-white truncate">{d.title}</h3>
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+                      <span>{d.estimatedWorkloadHours}h estimated</span>
+                      <span className="capitalize">{d.priority} priority</span>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -278,8 +284,12 @@ export const DeadlinePlannerView: React.FC = () => {
               </div>
             </>
           ) : (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-12 text-center text-xs text-slate-500">
-              Select or create a deadline to view its live countdown and backward schedule.
+            <div className="rounded-3xl border border-dashed border-slate-800 bg-slate-900/30 p-12 text-center">
+              <ClockAlert className="mx-auto h-10 w-10 text-slate-600" />
+              <h3 className="mt-3 text-sm font-bold text-white">No Deadline Selected</h3>
+              <p className="mt-1 text-xs text-slate-400 max-w-sm mx-auto">
+                Create an exam deadline or import your syllabus with a target exam date to generate an automated backward study roadmap.
+              </p>
             </div>
           )}
         </div>

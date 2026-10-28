@@ -163,49 +163,55 @@ export const WorkbenchView: React.FC = () => {
                 </div>
 
                 <div className="mt-3 flex-1 space-y-2.5 overflow-y-auto">
-                  {colTasks.map((t) => (
-                    <div
-                      key={t.id}
-                      className="group rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 text-xs space-y-2.5 shadow-sm transition-all hover:border-slate-700"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="font-semibold text-slate-200">{t.title}</span>
-                        <button
-                          onClick={() => handleLaunchFocus(t)}
-                          className="opacity-0 group-hover:opacity-100 rounded-lg bg-indigo-600/20 p-1 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all"
-                          title="Launch Pomodoro Focus for this task"
-                        >
-                          <Play className="h-3 w-3 fill-current" />
-                        </button>
-                      </div>
+                  {colTasks.length === 0 ? (
+                    <div className="py-8 text-center text-[11px] text-slate-600">
+                      No tasks in this lane
+                    </div>
+                  ) : (
+                    colTasks.map((t) => (
+                      <div
+                        key={t.id}
+                        className="group rounded-xl border border-slate-800 bg-slate-950/80 p-3.5 text-xs space-y-2.5 shadow-sm transition-all hover:border-slate-700"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="font-semibold text-slate-200">{t.title}</span>
+                          <button
+                            onClick={() => handleLaunchFocus(t)}
+                            className="opacity-0 group-hover:opacity-100 rounded-lg bg-indigo-600/20 p-1 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all"
+                            title="Launch Pomodoro Focus for this task"
+                          >
+                            <Play className="h-3 w-3 fill-current" />
+                          </button>
+                        </div>
 
-                      {t.description && (
-                        <p className="text-[11px] text-slate-400 line-clamp-2">{t.description}</p>
-                      )}
+                        {t.description && (
+                          <p className="text-[11px] text-slate-400 line-clamp-2">{t.description}</p>
+                        )}
 
-                      <div className="flex items-center justify-between border-t border-slate-800/80 pt-2 text-[10px] text-slate-500 font-mono">
-                        <span>~{t.estimatedMinutes}m</span>
-                        <div className="flex items-center gap-1">
-                          {col.status !== 'done' && (
-                            <button
-                              onClick={() => storage.updateTaskStatus(t.id, 'done')}
-                              className="text-emerald-400 hover:underline"
-                            >
-                              ✓ Done
-                            </button>
-                          )}
-                          {col.status === 'todo' && (
-                            <button
-                              onClick={() => storage.updateTaskStatus(t.id, 'in_progress')}
-                              className="text-indigo-400 hover:underline ml-1.5"
-                            >
-                              Start →
-                            </button>
-                          )}
+                        <div className="flex items-center justify-between border-t border-slate-800/80 pt-2 text-[10px] text-slate-500 font-mono">
+                          <span>~{t.estimatedMinutes}m</span>
+                          <div className="flex items-center gap-1">
+                            {col.status !== 'done' && (
+                              <button
+                                onClick={() => storage.updateTaskStatus(t.id, 'done')}
+                                className="text-emerald-400 hover:underline"
+                              >
+                                ✓ Done
+                              </button>
+                            )}
+                            {col.status === 'todo' && (
+                              <button
+                                onClick={() => storage.updateTaskStatus(t.id, 'in_progress')}
+                                className="text-indigo-400 hover:underline ml-1.5"
+                              >
+                                Start →
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             );
@@ -225,15 +231,20 @@ export const WorkbenchView: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {projects.map((p) => {
-              const projectTasks = tasks.filter((t) => t.projectId === p.id);
-              const doneTasks = projectTasks.filter((t) => t.status === 'done');
-              const percent = projectTasks.length > 0 ? Math.round((doneTasks.length / projectTasks.length) * 100) : 0;
-              return (
-                <div
-                  key={p.id}
-                  className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 space-y-4"
-                >
+            {projects.length === 0 ? (
+              <div className="col-span-2 rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-8 text-center text-xs text-slate-500">
+                No major projects created yet. Click "+ Create Project" above or schedule tasks from your syllabus plan.
+              </div>
+            ) : (
+              projects.map((p) => {
+                const projectTasks = tasks.filter((t) => t.projectId === p.id);
+                const doneTasks = projectTasks.filter((t) => t.status === 'done');
+                const percent = projectTasks.length > 0 ? Math.round((doneTasks.length / projectTasks.length) * 100) : 0;
+                return (
+                  <div
+                    key={p.id}
+                    className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 space-y-4"
+                  >
                   <div className="flex items-center justify-between">
                     <span className="rounded bg-indigo-500/20 px-2 py-0.5 text-[10px] font-mono text-indigo-300 font-bold uppercase">
                       {p.status.replace('_', ' ')}
@@ -257,8 +268,9 @@ export const WorkbenchView: React.FC = () => {
                   </div>
                 </div>
               );
-            })}
-          </div>
+            })
+          )}
+        </div>
         </div>
       )}
 

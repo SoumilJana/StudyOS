@@ -17,8 +17,13 @@ import {
   Play,
   Plus,
   SlidersHorizontal,
+  Upload,
+  FileUp,
+  Loader2,
+  BookOpen,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
+import { setupCourseFromSyllabus } from '../services/syllabusImporter';
 
 export const CommandCenterView: React.FC = () => {
   const navigate = useNavigate();
@@ -41,8 +46,64 @@ export const CommandCenterView: React.FC = () => {
 
   const [filterSubjectId] = useState<string>('all');
 
+  // Syllabus Setup Wizard State (for new/first-time users)
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [courseTitle, setCourseTitle] = useState('');
+  const [courseCode, setCourseCode] = useState('');
+  const [examDate, setExamDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateStatus, setGenerateStatus] = useState('Extracting syllabus & planning...');
+
+  const handleFileSelect = (file: File) => {
+    setUploadedFile(file);
+    const rawName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+    if (!courseTitle) setCourseTitle(rawName);
+    const codeMatch = rawName.match(/\b([A-Z]{3,6}\d{3,4}[A-Z]?)\b/i);
+    if (!courseCode && codeMatch) {
+      setCourseCode(codeMatch[0].toUpperCase());
+    }
+  };
+
+  const handleGenerateCourse = async () => {
+    if (!uploadedFile) return;
+    setIsGenerating(true);
+    setGenerateStatus('Extracting modules & chapters...');
+    try {
+      await setupCourseFromSyllabus(uploadedFile, examDate, courseTitle, courseCode);
+      try {
+        const confetti = (await import('canvas-confetti')).default;
+        confetti({ particleCount: 75, spread: 70, origin: { y: 0.6 } });
+      } catch {
+        // Confetti fallback
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Error generating course: ${msg}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   // Calculate Next Recommended Action
   const getRecommendedAction = () => {
+    if (subjects.length === 0) {
+      return {
+        title: 'Setup Your First Subject & Exam Plan',
+        subtitle: 'Upload your course syllabus PDF and target exam date below to let Study OS generate your roadmap.',
+        actionText: 'Scroll to Setup',
+        onAction: () => {
+          const el = document.getElementById('syllabus-setup-wizard');
+          el?.scrollIntoView({ behavior: 'smooth' });
+        },
+        icon: Sparkles,
+        badge: 'Welcome to Study OS',
+        color: 'from-indigo-600/30 to-violet-500/10 border-indigo-500/30 text-indigo-200',
+      };
+    }
     if (dueRevisionsToday.length > 0) {
       const urgentRev = dueRevisionsToday[0];
       return {
@@ -174,6 +235,98 @@ export const CommandCenterView: React.FC = () => {
               <span>{nextAction.actionText}</span>
               <ArrowRight className="h-3.5 w-3.5" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* First-Time User Onboarding / Syllabus Setup Wizard */}
+      {subjects.length === 0 && (
+        <div id="syllabus-setup-wizard" className="rounded-2xl border border-indigo-500/40 bg-gradient-to-br from-indigo-950/70 via-slate-900 to-slate-950 p-6 shadow-2xl space-y-4">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-indigo-400" />
+            <h2 className="text-base font-bold text-white">Setup Your Course, Syllabus & Exam Plan</h2>
+          </div>
+          <p className="text-xs text-slate-300 leading-relaxed max-w-2xl">
+            Upload your course syllabus PDF (or lecture notes) and set your target exam date. Study OS will automatically extract your modules, generate a backward revision calendar, create your initial flashcard deck, and organize your study roadmap.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+            {/* 1. File Upload */}
+            <div className="md:col-span-1">
+              <label className="text-xs font-semibold text-slate-300 mb-1 block">1. Syllabus PDF / Notes</label>
+              <label className="flex flex-col items-center justify-center rounded-xl border border-dashed border-indigo-500/50 bg-indigo-500/5 p-4 text-center cursor-pointer hover:bg-indigo-500/10 transition-colors">
+                <Upload className="h-6 w-6 text-indigo-400" />
+                <span className="mt-1 text-xs font-semibold text-white truncate max-w-full px-2">
+                  {uploadedFile ? uploadedFile.name : 'Choose Syllabus PDF'}
+                </span>
+                <span className="text-[10px] text-slate-400">Drag & drop or click</span>
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.doc,.txt,.md"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileSelect(file);
+                  }}
+                />
+              </label>
+            </div>
+
+            {/* 2. Course Name & Code */}
+            <div className="space-y-2 md:col-span-1">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">2. Course Title</label>
+                <input
+                  type="text"
+                  value={courseTitle}
+                  onChange={(e) => setCourseTitle(e.target.value)}
+                  placeholder="e.g. Ethical Hacking"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-slate-100"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">Course Code (Optional)</label>
+                <input
+                  type="text"
+                  value={courseCode}
+                  onChange={(e) => setCourseCode(e.target.value)}
+                  placeholder="e.g. PECCS701I"
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-slate-100 font-mono"
+                />
+              </div>
+            </div>
+
+            {/* 3. Exam Date & Submit */}
+            <div className="space-y-3 md:col-span-1 flex flex-col justify-between">
+              <div>
+                <label className="text-xs font-semibold text-slate-300 mb-1 block">3. Target Exam Date</label>
+                <input
+                  type="date"
+                  value={examDate}
+                  onChange={(e) => setExamDate(e.target.value)}
+                  className="w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-slate-100"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleGenerateCourse}
+                disabled={!uploadedFile || isGenerating}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 disabled:opacity-50 transition-all"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{generateStatus}</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    <span>Generate Complete Study OS Plan</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -344,45 +497,51 @@ export const CommandCenterView: React.FC = () => {
             </div>
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {subjects.map((sub) => {
-                // Calculate subject mastery score
-                let totalTopics = 0;
-                let sumScores = 0;
-                sub.modules.forEach((m) =>
-                  m.chapters.forEach((c) =>
-                    c.topics.forEach((t) => {
-                      totalTopics++;
-                      sumScores += t.masteryScore;
-                    })
-                  )
-                );
-                const subScore = totalTopics > 0 ? Math.round(sumScores / totalTopics) : 0;
+              {subjects.length === 0 ? (
+                <div className="py-6 text-center text-xs text-slate-500 col-span-3">
+                  No subjects enrolled yet. Use the setup wizard above to import your syllabus.
+                </div>
+              ) : (
+                subjects.map((sub) => {
+                  // Calculate subject mastery score
+                  let totalTopics = 0;
+                  let sumScores = 0;
+                  sub.modules.forEach((m) =>
+                    m.chapters.forEach((c) =>
+                      c.topics.forEach((t) => {
+                        totalTopics++;
+                        sumScores += t.masteryScore;
+                      })
+                    )
+                  );
+                  const subScore = totalTopics > 0 ? Math.round(sumScores / totalTopics) : 0;
 
-                return (
-                  <div
-                    key={sub.id}
-                    onClick={() => navigate('/learning')}
-                    className="cursor-pointer rounded-xl border border-slate-800/80 bg-slate-950/50 p-3.5 transition-all hover:border-slate-700 hover:bg-slate-900"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="rounded px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-400 bg-slate-800">
-                        {sub.code}
-                      </span>
-                      <span className="text-xs font-bold text-slate-200">{subScore}%</span>
+                  return (
+                    <div
+                      key={sub.id}
+                      onClick={() => navigate('/learning')}
+                      className="cursor-pointer rounded-xl border border-slate-800/80 bg-slate-950/50 p-3.5 transition-all hover:border-slate-700 hover:bg-slate-900"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="rounded px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-400 bg-slate-800">
+                          {sub.code}
+                        </span>
+                        <span className="text-xs font-bold text-slate-200">{subScore}%</span>
+                      </div>
+                      <div className="mt-2 text-xs font-bold text-white truncate">{sub.name}</div>
+                      <p className="mt-0.5 text-[10px] text-slate-400">
+                        {sub.exams.length} exam{sub.exams.length !== 1 ? 's' : ''} scheduled
+                      </p>
+                      <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
+                        <div
+                          className="h-full bg-indigo-500"
+                          style={{ width: `${subScore}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="mt-2 text-xs font-bold text-white truncate">{sub.name}</div>
-                    <p className="mt-0.5 text-[10px] text-slate-400">
-                      {sub.exams.length} exam{sub.exams.length !== 1 ? 's' : ''} scheduled
-                    </p>
-                    <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
-                      <div
-                        className="h-full bg-indigo-500"
-                        style={{ width: `${subScore}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           </div>
         </div>
@@ -406,7 +565,11 @@ export const CommandCenterView: React.FC = () => {
               </div>
 
               <div className="mt-4 space-y-2.5">
-                {weakTopics.length === 0 ? (
+                {subjects.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-slate-500">
+                    No subjects enrolled yet. Import your course above to track topics.
+                  </div>
+                ) : weakTopics.length === 0 ? (
                   <div className="py-6 text-center text-xs text-emerald-400">
                     No critical weak spots detected. All topics above 60% accuracy!
                   </div>
