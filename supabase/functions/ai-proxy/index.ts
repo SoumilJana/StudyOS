@@ -10,9 +10,10 @@ const corsHeaders = {
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 const DEFAULT_FREE_MODELS = [
+  "google/gemma-4-31b-it:free",
+  "nvidia/nemotron-3-ultra-550b-a55b:free",
   "nvidia/nemotron-3.5-lightning:free",
   "liquid/lfm-2.5-2.6b:free",
-  "google/gemma-4-26b-a4b-it:free",
 ];
 
 serve(async (req: Request) => {

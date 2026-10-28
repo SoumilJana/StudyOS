@@ -34,6 +34,7 @@ import {
   INITIAL_GAMIFICATION,
   INITIAL_USER_SETTINGS,
   INITIAL_NOTIFICATIONS,
+  INITIAL_RESOURCES,
 } from './seedData';
 
 type Listener = () => void;
@@ -79,7 +80,31 @@ class StudyOSStorage {
       this.gamification = this.loadFromStorage('study_os_gamification', INITIAL_GAMIFICATION);
       this.settings = this.loadFromStorage('study_os_settings', INITIAL_USER_SETTINGS);
       this.notifications = this.loadFromStorage('study_os_notifications', INITIAL_NOTIFICATIONS);
-      this.resources = this.loadFromStorage('study_os_resources', []);
+      this.resources = this.loadFromStorage('study_os_resources', INITIAL_RESOURCES);
+
+      // Ensure Ethical Hacking course is loaded
+      if (!this.subjects.some((s) => s.id === 'sub-eh701')) {
+        const eh = INITIAL_SUBJECTS.find((s) => s.id === 'sub-eh701');
+        if (eh) {
+          this.subjects.unshift(eh);
+          this.saveToStorage('study_os_subjects', this.subjects);
+        }
+      }
+
+      // Ensure Ethical Hacking deadline is loaded
+      if (!this.deadlines.some((d) => d.id === 'dl-eh701-mid')) {
+        const ehDl = INITIAL_DEADLINES.find((d) => d.id === 'dl-eh701-mid');
+        if (ehDl) {
+          this.deadlines.unshift(ehDl);
+          this.saveToStorage('study_os_deadlines', this.deadlines);
+        }
+      }
+
+      // Ensure Ethical Hacking resources are loaded
+      if (this.resources.length === 0 && INITIAL_RESOURCES.length > 0) {
+        this.resources = INITIAL_RESOURCES;
+        this.saveToStorage('study_os_resources', this.resources);
+      }
 
       // Verify streak and day-boundary maintenance
       this.verifyDailyStreak();

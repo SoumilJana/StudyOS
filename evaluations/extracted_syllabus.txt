@@ -1,0 +1,377 @@
+
+--- Page 1 ---
+   
+ 
+   
+ 
+ 
+                                                                                                                             
+University of Engineering & Management, Kolkata 
+University of Engineering & Management, Jaipur 
+Institute of Engineering & Management, Kolkata 
+Department of CSE (IoT, CS & BT) 
+DETAILED SYLLABUS 
+Course Code- PECCS701I  
+Course Title – Ethical Hacking 
+Credit – 3 
+Category – Professional Elective Course 
+Semester – VII 
+L:T:P:S – 3:0:0:0 
+Pre-requisite – Basic knowledge of Computer Networking, Operating Systems (especially Linux), Basics of scripting in 
+Python, Bash, 
+ 
+Course Outcomes: 
+CO1 Students will be able to understand the core concepts of of ethical hacking, cybersecurity threats, legal 
+frameworks, and penetration testing methodologies. 
+CO2 Students will be able to apply reconnaissance, scanning, enumeration, vulnerability assessment, and 
+exploitation techniques using industry-standard tools. 
+CO3 Students will be able to analyze vulnerabilities in operating systems, web applications, wireless networks, 
+APIs, and cloud environments, and recommend suitable countermeasures.. 
+
+--- Page 2 ---
+   
+ 
+   
+ 
+CO4 Students will be able to conduct ethical penetration testing, prepare professional security assessment 
+reports, and recommend mitigation strategies following industry standards. 
+ 
+Module 
+No. 
+Topic  Sub-topics  Mapping 
+with 
+Industry and 
+International 
+Academia 
+Lecture 
+Hours 
+Corresponding 
+Lab 
+Assignments 
+Textbook 
+Mapping 
+1 Fundamentals of 
+Ethical Hacking and 
+Cybersecurity 
+Introduction to Ethical 
+Hacking. Types of Hackers 
+and Hacking Phases. Legal 
+and Ethical Aspects of 
+Hacking. Cyber Kill Chain, 
+Vulnerability Disclosure, 
+Bug Bounty Cybersecurity 
+Concepts: Threats, 
+vulnerabilities, and Attacks, 
+Footprinting and 
+Reconnaissance, Techniques 
+Tools:  
+International 
+Academia: 
+Stanford 
+University 
+Online Courses 
+https://www.cour
+sera.org/learn/cer
+tified-ethical-
+hacking-v12-
+ethical-hacking-
+fundamentals? 
+  
+  
+Industry 
+Mapping: Nmap, 
+Whois, Maltego 
+8 NA Textbook-1 
+Chapters: 1 to 
+2 
+Textbook-2 
+Chapters: 1 
+Textbook-3 
+Chapters: 1,2 
+ 
+  
+ 
+2 System and 
+Network 
+Exploitation 
+System and Network 
+Exploitation, Scanning and 
+Enumeration.System 
+International 
+Academia: 
+8 
+ 
+NA Textbook-1 
+Chapters: 3, 7 
+--- Page 3 ---
+   
+ 
+   
+ 
+Hacking: Password 
+Cracking, Privilege 
+Escalation. Vulnerability 
+Assessment,Nessus 
+OpenVAS, Nmap NSE 
+Active Directory Basics 
+Network Sniffing and 
+Packet Analysis. Social 
+Engineering Techniques 
+ 
+ 
+Stanford 
+University 
+Online Courses 
+https://www.co
+ursera.org/spe
+cializations/pac
+kt-the-
+complete-
+ethical-
+hacking-
+bootcamp-
+beginner-to-
+advanced 
+  
+Industry 
+Mapping: 
+Wireshark ,Etterc
+ap. Snort , 
+Hashcat 
+ 
+ 
+ 
+ 
+Textbook-3 
+Chapters: 4, 
+5,6,8,10 
+ 
+--- Page 4 ---
+   
+ 
+   
+ 
+3 Web and Wireless 
+Hacking 
+Web Application 
+Vulnerabilities: SQL 
+Injection, XML Attacks, 
+CSRF, XSS, SSRF, IDOR 
+XXE 
+Web Server Hacking and 
+Security Measures. 
+Session Hijacking and 
+Cookie Exploits. 
+Wireless Network Attacks: 
+WPA2,WPA3, Enterprise 
+WiFi Security,Evil 
+TwinCracking, Evil Twin, 
+Deauth Attacks 
+ 
+ 
+International 
+Academia: 
+Stanford 
+University 
+Online Courses 
+https://www.cour
+sera.org/specializ
+ations/packt-the-
+complete-ethical-
+hacking-
+bootcamp-
+beginner-to-
+advanced 
+Industry 
+Mapping:  
+Burp Suite, 
+SQLMap, Nikto, 
+OpenVAS / 
+Greenbone, 
+Wireshark, 
+Wireshark 
+6 NA Textbook-1 
+Chapters: 18 
+to 24 
+Textbook-2 
+Chapters: 17 
+Textbook-3 
+Chapters: 4, 
+5,6,8,10 
+ 
+ 
+ 
+4 Advanced 
+Techniques and 
+Countermeasures 
+Denial of Service 
+(DoS/DDoS) Attacks. 
+Firewall, IDS/IPS Evasion 
+Techniques. Introduction to 
+Metasploit and Exploit 
+Frameworks. Basics of 
+Cryptography and Secure 
+Communication.  
+International 
+Academia: 
+Stanford 
+University 
+Online Courses 
+https://www.cour
+sera.org/learn/eth
+6 NA Textbook-1 
+Chapters: 25 
+to 29 
+Textbook-2 
+Chapters 9,11  
+Textbook-3 
+Chapters 
+--- Page 5 ---
+   
+ 
+   
+ 
+Penetration Testing 
+Methodology :Scanning 
+Targets of Interest, 
+Exployting Known 
+Vulnerabilities using nmap,  
+Social Engineering and 
+Phishing Attack Simulation 
+(Awareness and Defense) 
+ical-hacking-
+essentials-ehe 
+ Industry 
+Mapping: LOIC / 
+HOIC, 
+Metasploit, 
+FOCA, OpenSSL, 
+Nmap NSE 
+scripts 
+5,6,7  
+ 
+5. AI in Cybersecurity Introduction to AI in 
+Cybersecurity, Machine 
+Learning for Intrusion 
+Detection, LLMs in 
+Security, 
+AI-assisted Vulnerability 
+Analysis, AI-assisted 
+Malware Detection, 
+Prompt Injection, 
+Adversarial AI, 
+Deepfake Security 
+International 
+Academia: 
+IITM 
+https://iitmprava
+rtak.simplilearn.
+com/ai-
+cybersecurity-
+course-
+online?utm_sour
+ce=google&utm_
+medium=cpc&ut
+m_term=cyberse
+curity%20course
+&utm_content=2
+3305657383-
+184559993650-
+786162194399&
+utm_device=c&u
+tm_campaign=S
+earch-
+8  Textbook-4 
+Chapters: 1, 
+2, 4–7, 10 
+--- Page 6 ---
+   
+ 
+   
+ 
+TechCluster-
+Cyber-
+CCyberAIMaster
+y-PG-IITM-IN-
+Main-AllDevice-
+IITMdomain-
+adgroup-Cyber-
+Course&gad_so
+urce=1&gad_ca
+mpaignid=23305
+657383&gbraid=
+0AAAAADt9AX
+M6GxsdB5Jynb
+SscnF2qirgz&gc
+lid=CjwKCAjwv
+NfSBhBiEiwAya
+GMCV-
+40avLgeblboYV5
+i2iqLuZC25__-
+b9OzPqbU-
+nbXbhN3cReNi
+Q_BoCCWQQA
+vD_BwE 
+ 
+Industry 
+Mapping: Splunk 
+Enterprise 
+,security , 
+Microsoft 
+Security Copilot  
+--- Page 7 ---
+   
+ 
+   
+ 
+Microsoft 
+Sentinel, IBM 
+QRadar 
+CrowdStrike 
+Falcon 
+,SentinelOne , 
+Darktrace,  Cisco 
+SecureX 
+ 
+ 
+Textbooks:  
+1. Thirumalesh –“The Complete Ethical Hacking Book: A Comprehensive Beginner's Guide to Learn and Master in Ethical 
+Hacking “Orange Book Publication 
+2. Michael Kofler, Klaus Gebeshuber-“Hacking and Security-The Comprehensive Guide to Penetration Testing and Cyber 
+Security”-Shroff Publishers & Distrbutors 
+3. Ankit Fadia –  “The Unofficial Guide to Ethical Hacking “Macmillan Publishers India Limited. 
+4. Prof. Ajit Singh – AI Security, Shroff Publishers & Distributors Pvt. Ltd., 2025 
+Reference books:  
+1. Samir Kumar Rakshit–  “Ethical Hacker’s Penetration Testing Guide” – BPB Publication 
+2. Abhinav Ojha,-“ Beginners Guide To Ethical Hacking and Cyber Security, Notion Press  
+3. Ethical Hacking Paperback – by Daniel Graham (Author), No Starch Press 
+4. Ethical Hacking and Penetration Testing Guide Paperback – by RAFAY BALOCH, CRC Press 
+5. Artificial Intelligence for Cybersecurity (CRC Press, 2024) 
+ 
+ 
+Online Resources: 
+1. https://www.springboard.com/blog/cybersecurity/7-free-sources-to-learn-ethical-hacking-from-scratch/ 
+2. https://snyk.io/ethical-hacking-resources/ 
+3. https://cybersecurityguide.org/resources/ethical-hacker/ 
+--- Page 8 ---
+   
+ 
+   
+ 
+4. https://www.udemy.com/course/learn-ethical-hacking-from-scratch/?srsltid=AfmBOooNDcGi6mPH-y-
+PZIVeIfoQ91Gu_fkPWKO-9V4PqJxCSOxaK7Yb 
+ 
+ 
+ 
+CO-PO Mapping: 
+ 
+COs / 
+POs PO1 PO2 PO3 PO4 PO5 PO6 PO7 PO8 PO9 PO10 PO11 PO12 
+CO1:. 3 2   1 2  3    2 
+CO2:. 2 3 2 2 3   2 1   2 
+CO3:  2 3 3 3 3 2 1 2 1 1  2 
+CO4. 2 3 3 2 3 2       
+ 
+ 
+ 
+ 
