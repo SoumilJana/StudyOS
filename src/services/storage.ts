@@ -174,7 +174,7 @@ class StudyOSStorage {
   private init() {
     try {
       const storageVersion = typeof localStorage !== 'undefined' ? localStorage.getItem('study_os_version') : null;
-      const CURRENT_VERSION = 'v3_fresh_clean_user';
+      const CURRENT_VERSION = 'v4_zero_demo_clean_slate';
 
       if (typeof localStorage !== 'undefined' && storageVersion !== CURRENT_VERSION) {
         localStorage.clear();
@@ -1163,7 +1163,7 @@ class StudyOSStorage {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('study_os_sync_queue');
       localStorage.clear();
-      localStorage.setItem('study_os_version', 'v3_fresh_clean_user');
+      localStorage.setItem('study_os_version', 'v4_zero_demo_clean_slate');
     }
     this.memoryStore.clear();
     this.subjects = [];

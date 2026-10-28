@@ -49,7 +49,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
         if (data.user) {
           if (!data.session) {
             setSuccessMessage(
-              `Confirmation email sent to ${email}! Please check your inbox and click the verification link. It will automatically redirect right back to Study OS.`
+              `Confirmation email sent to ${email}! If the link in your email redirects to localhost, you can sign in directly below with your password, or ensure your Supabase Auth Site URL is configured to ${window.location.origin}.`
             );
           } else {
             setSuccessMessage('Account created successfully! You are now logged in.');

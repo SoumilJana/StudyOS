@@ -119,10 +119,12 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
     }
 
     // Markdown Table: starts with '|' and contains '|'
-    if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+    if (trimmed.startsWith('|') && trimmed.includes('|')) {
       const tableLines: string[] = [];
-      while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
-        tableLines.push(lines[i].trim());
+      while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().includes('|')) {
+        let t = lines[i].trim();
+        if (!t.endsWith('|')) t = `${t} |`;
+        tableLines.push(t);
         i++;
       }
 
