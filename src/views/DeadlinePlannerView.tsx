@@ -81,12 +81,23 @@ export const DeadlinePlannerView: React.FC = () => {
     setRecalculateFeedback(null);
 
     // Provide smooth tactical feedback
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await new Promise((resolve) => setTimeout(resolve, 350));
+
+    const linkedSubject = subjects.find(
+      (s) => s.id === selectedDeadline.linkedSubjectId || s.name.toLowerCase() === selectedDeadline.title.replace(/examination|exam/gi, '').trim().toLowerCase()
+    );
+    const moduleNames = linkedSubject?.modules.map((m) => m.title) || [];
+    const weakTopicIds = storage
+      .getMistakes()
+      .map((m) => m.topicId)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
 
     const plan = aiService.generateBackwardPlan(
       selectedDeadline.title,
       selectedDeadline.dueDate,
-      selectedDeadline.estimatedWorkloadHours
+      selectedDeadline.estimatedWorkloadHours,
+      weakTopicIds,
+      moduleNames
     );
 
     // Keep completed flags if already completed
@@ -98,7 +109,7 @@ export const DeadlinePlannerView: React.FC = () => {
       };
     });
 
-    const updated = {
+    const updated: Deadline = {
       ...selectedDeadline,
       backwardPlan: updatedPlan,
     };
@@ -106,13 +117,15 @@ export const DeadlinePlannerView: React.FC = () => {
     storage.saveDeadline(updated);
     setSelectedDeadline(updated);
     setIsRecalculating(false);
+
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     setRecalculateFeedback(
-      `✓ Schedule recalibrated: ${updatedPlan.length} milestones dynamically distributed across remaining days.`
+      `✓ Schedule remade at ${timestamp}: ${updatedPlan.length} milestones dynamically calculated for remaining days.`
     );
 
     setTimeout(() => {
       setRecalculateFeedback(null);
-    }, 4500);
+    }, 7000);
   };
 
   const handleDeleteDeadline = (id: string) => {

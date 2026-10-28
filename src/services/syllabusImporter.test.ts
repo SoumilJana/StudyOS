@@ -82,4 +82,36 @@ describe('Syllabus Importer Service', () => {
     const tooManyFiles = Array.from({ length: 11 }, (_, i) => new File(['note'], `note-${i}.txt`, { type: 'text/plain' }));
     await expect(setupCourseFromSyllabus(tooManyFiles, '2026-11-30')).rejects.toThrow(/Maximum 10 files allowed/i);
   });
+
+  it('never extracts document header markers or orphaned conjunctions as topics, and generates grounded flashcards', async () => {
+    const { setupCourseFromSyllabus } = await import('./syllabusImporter');
+    const dirtyText = `
+      === DOCUMENT 1: Ethical_Hacking_Course_Plan.pdf ===
+      Course Code: EH101
+      Course Title: Ethical Hacking Defense
+      1 Network Defense & Security Breaches
+      Network reconnaissance strategies, and security breaches in computers, defense in depth.
+      === DOCUMENT 2: Notes.pdf ===
+      2 Exploitation Analysis
+      Buffer overflow vulnerabilities, cross-site scripting prevention.
+    `;
+
+    const file = new File([dirtyText], 'Ethical_Hacking_Course_Plan.pdf', { type: 'text/plain' });
+    const result = await setupCourseFromSyllabus([file], '2026-12-15', 'Ethical Hacking Defense', 'EH101');
+
+    // Verify topics do not contain "pdf ===" or start with "and "
+    const allTopics = result.subject.modules.flatMap((m) => m.chapters.flatMap((c) => c.topics));
+    allTopics.forEach((t) => {
+      expect(t.title).not.toContain('===');
+      expect(t.title).not.toContain('.pdf');
+      expect(t.title).not.toMatch(/^and\s+/i);
+    });
+
+    // Verify flashcards are grounded and never contain the generic boilerplate
+    result.flashcards.forEach((c) => {
+      expect(c.front).not.toContain('pdf ===');
+      expect(c.front).not.toContain('of and ');
+      expect(c.back).not.toContain('Understanding this mechanism is essential for vulnerability discovery, mitigation analysis, and exam scenarios.');
+    });
+  });
 });

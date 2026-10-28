@@ -187,6 +187,20 @@ class StudyOSStorage {
       this.tasks = this.loadFromStorage('study_os_tasks', []);
       this.decks = this.loadFromStorage('study_os_decks', []);
       this.flashcards = this.loadFromStorage('study_os_flashcards', []);
+
+      // Sanitize any corrupted legacy flashcards produced by previous fragmented topic parsing
+      this.flashcards = this.flashcards.filter((c) => {
+        const f = c.front?.toLowerCase() || '';
+        const b = c.back?.toLowerCase() || '';
+        if (f.includes('pdf ===') || f.includes('===') || f.includes('of and security breaches') || f.includes('mechanism of and ')) {
+          return false;
+        }
+        if (b.includes('a fundamental security concept in') && b.includes('understanding this mechanism is essential')) {
+          return false;
+        }
+        return true;
+      });
+      this.saveToStorage('study_os_flashcards', this.flashcards);
       this.questions = this.loadFromStorage('study_os_questions', []);
       this.mistakes = this.loadFromStorage('study_os_mistakes', []);
       this.revisions = this.loadFromStorage('study_os_revisions', []);
@@ -402,6 +416,29 @@ class StudyOSStorage {
   public deleteSubject(id: string): void {
     this.subjects = this.subjects.filter((s) => s.id !== id);
     this.saveToStorage('study_os_subjects', this.subjects);
+
+    // Cascade delete all child tasks, deadlines, decks, flashcards, questions, resources, and revisions
+    const childTasks = this.tasks.filter((t) => t.subjectId === id);
+    childTasks.forEach((t) => this.deleteTask(t.id));
+
+    const childDeadlines = this.deadlines.filter((d) => d.linkedSubjectId === id);
+    childDeadlines.forEach((d) => this.deleteDeadline(d.id));
+
+    const childDecks = this.decks.filter((dk) => dk.subjectId === id);
+    childDecks.forEach((dk) => this.deleteDeck(dk.id));
+
+    this.flashcards = this.flashcards.filter((fc) => fc.subjectId !== id);
+    this.saveToStorage('study_os_flashcards', this.flashcards);
+
+    this.questions = this.questions.filter((q) => q.subjectId !== id);
+    this.saveToStorage('study_os_questions', this.questions);
+
+    this.resources = this.resources.filter((r) => r.subjectId !== id);
+    this.saveToStorage('study_os_resources', this.resources);
+
+    this.revisions = this.revisions.filter((rv) => rv.subjectId !== id);
+    this.saveToStorage('study_os_revisions', this.revisions);
+
     this.notify();
   }
 
@@ -500,33 +537,67 @@ class StudyOSStorage {
   // ==========================================
   // Deadlines & Backward Planner
   // ==========================================
-  // Deadlines & Backward Planner
-  // ==========================================
   private deduplicateDeadlines(deadlines: Deadline[]): Deadline[] {
-    const seen = new Set<string>();
-    const result: Deadline[] = [];
+    const seen = new Map<string, Deadline>();
     for (const d of deadlines) {
-      const key = `${d.title.trim().toLowerCase()}_${d.category}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        result.push(d);
+      if (!d || !d.title) continue;
+      // Normalize whitespace and casing
+      const normTitle = d.title.trim().toLowerCase().replace(/\s+/g, ' ');
+      // If linked to the same subject as an exam, group as the primary exam deliverable
+      const subjectKey =
+        d.linkedSubjectId && d.category === 'exam'
+          ? `sub_${d.linkedSubjectId}_exam`
+          : null;
+      const titleKey = `${normTitle}_${d.category || 'exam'}`;
+      const primaryKey = subjectKey || titleKey;
+
+      if (!seen.has(primaryKey)) {
+        seen.set(primaryKey, d);
+      } else {
+        const existing = seen.get(primaryKey)!;
+        const currentSteps = d.backwardPlan || [];
+        const existingSteps = existing.backwardPlan || [];
+        // Preserve any completed steps
+        const mergedPlan = (currentSteps.length >= existingSteps.length ? currentSteps : existingSteps).map(
+          (step, idx) => {
+            const exStep = existingSteps[idx];
+            const curStep = currentSteps[idx];
+            return {
+              ...step,
+              completed: exStep?.completed || curStep?.completed || false,
+            };
+          }
+        );
+        seen.set(primaryKey, {
+          ...existing,
+          ...d,
+          id: existing.id,
+          backwardPlan: mergedPlan,
+        });
       }
     }
-    return result;
+    return Array.from(seen.values());
   }
 
   public getDeadlines(): Deadline[] {
+    this.deadlines = this.deduplicateDeadlines(this.deadlines);
     return [...this.deadlines];
   }
 
   public saveDeadline(deadline: Deadline): void {
     const targetUuid = toValidUuid(deadline.id);
+    const normTitle = deadline.title.trim().toLowerCase().replace(/\s+/g, ' ');
+
     const index = this.deadlines.findIndex(
       (d) =>
         d.id === deadline.id ||
         toValidUuid(d.id) === targetUuid ||
-        (d.title.trim().toLowerCase() === deadline.title.trim().toLowerCase() &&
-          d.category === deadline.category)
+        (d.linkedSubjectId &&
+          deadline.linkedSubjectId &&
+          d.linkedSubjectId === deadline.linkedSubjectId &&
+          d.category === deadline.category) ||
+        (d.title.trim().toLowerCase().replace(/\s+/g, ' ') === normTitle &&
+          (d.category || 'exam') === (deadline.category || 'exam'))
     );
     const op = index >= 0 ? 'update' : 'create';
     if (index >= 0) {
@@ -732,6 +803,13 @@ class StudyOSStorage {
     }
     this.saveToStorage('study_os_decks', this.decks);
     this.emitMutation('deck', deck.id, op, deck);
+    this.notify();
+  }
+
+  public deleteDeck(id: string): void {
+    this.decks = this.decks.filter((d) => d.id !== id);
+    this.saveToStorage('study_os_decks', this.decks);
+    this.emitMutation('deck', id, 'delete', null);
     this.notify();
   }
 

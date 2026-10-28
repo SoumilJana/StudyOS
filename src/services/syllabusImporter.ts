@@ -15,6 +15,7 @@ import {
 import { storage } from './storage';
 import { aiService } from './aiService';
 import { parseUploadedDocument } from './documentExtractor';
+import { extractTopicContext } from './topicExtractor';
 
 export interface SyllabusImportResult {
   subject: Subject;
@@ -157,7 +158,10 @@ export function extractHierarchyFromSyllabusText(
   // Helper to extract clean topics from content
   const extractTopicsFromContent = (content: string, modNum: number): string[] => {
     const cleaned = content
+      .replace(/===+\s*DOCUMENT[\s\S]*?===+/gi, '')
+      .replace(/===+/g, '')
       .replace(/--- Page \d+ ---/g, '')
+      .replace(/---+\s*Page[\s\S]*?---+/gi, '')
       .replace(/https?:\/\/\S+/g, '')
       .replace(/Stanford University Online Courses/gi, '')
       .replace(/International Academia:[^.]*/gi, '')
@@ -169,9 +173,13 @@ export function extractHierarchyFromSyllabusText(
       .replace(/NA/g, '');
 
     const rawPhrases = cleaned
-      .split(/[\n,;.]/)
+      .split(/[\n;•·▪▫►–—]/)
       .map((p) => p.trim())
-      .map((p) => p.replace(/^[0-9.-]+\s*/, ''))
+      .map((p) => p.replace(/^[0-9]+[.):\s-]+\s*/, ''))
+      .map((p) => p.replace(/^(and|or|in|with|of|to|for|at|the|a|an)\s+/i, ''))
+      .map((p) => p.replace(/[=~_.,-]+$/g, '').trim())
+      .map((p) => p.replace(/\.pdf\b/gi, '').trim())
+      .map((p) => (p.length > 0 ? p.charAt(0).toUpperCase() + p.slice(1) : ''))
       .filter((p) => {
         const l = p.toLowerCase();
         return (
@@ -184,7 +192,14 @@ export function extractHierarchyFromSyllabusText(
           !l.includes('university') &&
           !l.includes('module') &&
           !l.includes('mapping') &&
-          !l.includes('credit')
+          !l.includes('credit') &&
+          !l.includes('page ') &&
+          !l.includes('document') &&
+          !l.includes('===') &&
+          !l.includes('---') &&
+          !l.endsWith('.pdf') &&
+          !/^[0-9\s.,-]+$/.test(p) &&
+          !/^(pdf|doc|docx|ppt|pptx)$/i.test(p)
         );
       });
 
@@ -443,14 +458,16 @@ export async function setupCourseFromSyllabus(
     `${finalTitle} Final Exam`,
     examDateStr,
     30, // 30 target study hours
-    allTopicIds
+    allTopicIds,
+    hierarchy.modules.map((m) => m.title)
   );
 
+  const normDeadlineTitle = `${finalTitle} Examination`.trim().toLowerCase().replace(/\s+/g, ' ');
   const existingDeadlines = storage.getDeadlines();
   const existingDl = existingDeadlines.find(
     (d) =>
-      d.title.toLowerCase() === `${finalTitle} Examination`.toLowerCase() ||
-      d.linkedSubjectId === subject.id
+      d.title.trim().toLowerCase().replace(/\s+/g, ' ') === normDeadlineTitle ||
+      (d.linkedSubjectId && d.linkedSubjectId === subject.id && d.category === 'exam')
   );
   const deadlineId = existingDl ? existingDl.id : `dl-${Date.now()}`;
   const deadline: Deadline = {
@@ -492,30 +509,75 @@ export async function setupCourseFromSyllabus(
 
   // Specific high-yield prompts for key topics
   const flashcards: Flashcard[] = allTopics.map((top, idx) => {
-    let front = `What is the core definition and mechanism of ${top.title}?`;
-    let back = `A fundamental security concept in ${finalTitle}. Understanding this mechanism is essential for vulnerability discovery, mitigation analysis, and exam scenarios.`;
+    const lTitle = top.title.toLowerCase();
+    let front = `What is ${top.title}, and what is its operational function in ${finalTitle}?`;
+    let back = '';
 
-    if (top.title.toLowerCase().includes('kill chain')) {
+    if (lTitle.includes('kill chain')) {
       front = 'List the 7 phases of the Lockheed Martin Cyber Kill Chain in chronological order.';
       back = '1. Reconnaissance, 2. Weaponization, 3. Delivery, 4. Exploitation, 5. Installation, 6. Command & Control (C2), 7. Actions on Objectives.';
-    } else if (top.title.toLowerCase().includes('reconnaissance') || top.title.toLowerCase().includes('footprinting')) {
+    } else if (lTitle.includes('reconnaissance') || lTitle.includes('footprinting')) {
       front = 'Contrast Passive Reconnaissance with Active Reconnaissance, and name one standard tool for each.';
       back = 'Passive Recon gathers intelligence without directly transmitting packets to the target (e.g. WHOIS, OSINT, Shodan). Active Recon probes the target directly (e.g. Nmap SYN scan, banner grabbing).';
-    } else if (top.title.toLowerCase().includes('sql') || top.title.toLowerCase().includes('injection')) {
+    } else if (lTitle.includes('sql') || lTitle.includes('injection')) {
       front = 'What is the root cause of SQL Injection (SQLi) and what is the primary defensive mitigation?';
       back = 'Root cause: Unsanitized user inputs concatenated directly into dynamic SQL queries. Primary mitigation: Parameterized queries (Prepared Statements) and stored procedures.';
-    } else if (top.title.toLowerCase().includes('privilege escalation')) {
+    } else if (lTitle.includes('privilege escalation')) {
       front = 'Define Horizontal vs. Vertical Privilege Escalation.';
       back = 'Horizontal: An attacker gains access to resources belonging to another user with the same privilege level. Vertical: An attacker elevates access from a low-privileged account to administrative/root/SYSTEM privileges.';
-    } else if (top.title.toLowerCase().includes('wireless') || top.title.toLowerCase().includes('wpa')) {
+    } else if (lTitle.includes('wireless') || lTitle.includes('wpa')) {
       front = 'Explain the security vulnerability that enables offline 4-way handshake cracking in WPA2-PSK.';
       back = 'WPA2 4-way handshakes use a pre-shared key (PSK) to derive the Pairwise Transient Key (PTK). An attacker capturing the handshake can compute offline dictionary/brute-force attacks against the PMK.';
-    } else if (top.title.toLowerCase().includes('metasploit')) {
+    } else if (lTitle.includes('metasploit')) {
       front = 'In the Metasploit Framework, explain the difference between an Exploit and a Payload.';
       back = 'Exploit: The software sequence that takes advantage of a specific vulnerability to gain unauthorized access. Payload: The code that executes on the target system after the vulnerability is successfully exploited (e.g. Meterpreter reverse shell).';
-    } else if (top.title.toLowerCase().includes('ai in cybersecurity') || top.title.toLowerCase().includes('prompt injection')) {
+    } else if (lTitle.includes('nmap') || lTitle.includes('scanning')) {
+      front = 'Explain how a TCP SYN Stealth Scan (Nmap -sS) operates and why it is termed "half-open".';
+      back = 'The scanner sends a SYN packet. If the port is open, the target replies with SYN-ACK. The scanner immediately sends an RST (Reset) instead of completing the 3-way handshake with an ACK, avoiding a fully established connection in application logs.';
+    } else if (lTitle.includes('dos') || lTitle.includes('denial of service')) {
+      front = 'What distinguishes a Denial of Service (DoS) attack from a Distributed Denial of Service (DDoS) attack?';
+      back = 'DoS originates from a single source host or IP targeting system availability. DDoS leverages a coordinated network of compromised botnets/zombies across multiple geographies, making rate-limiting and IP blacklisting significantly harder.';
+    } else if (lTitle.includes('firewall') || lTitle.includes('ids') || lTitle.includes('ips')) {
+      front = 'Compare the operational distinction between an IDS (Intrusion Detection System) and an IPS (Intrusion Prevention System).';
+      back = 'An IDS passively inspects network traffic copies and raises alerts on suspicious signatures (out-of-band). An IPS sits inline with traffic flow and actively drops malicious packets or blocks offending IP addresses in real time.';
+    } else if (lTitle.includes('crypto') || lTitle.includes('cipher')) {
+      front = 'Explain the fundamental difference between Symmetric and Asymmetric Encryption.';
+      back = 'Symmetric uses a single shared secret key for both encryption and decryption (e.g. AES). Asymmetric uses a mathematically linked public-private key pair where data encrypted with the public key can only be decrypted by the private key (e.g. RSA, ECC).';
+    } else if (lTitle.includes('ai in cybersecurity') || lTitle.includes('prompt injection')) {
       front = 'What is Prompt Injection in LLM-assisted security systems, and how does it compromise automated workflows?';
       back = 'Prompt Injection occurs when untrusted user input manipulates the LLM into disregarding developer instructions, causing unauthorized tool execution, privilege bypass, or sensitive data exfiltration.';
+    } else {
+      // Ground the card in the uploaded document text if possible
+      const topicContext = extractTopicContext(combinedText, top.title, finalTitle, 2000);
+      let definitionSentence = '';
+
+      if (topicContext.context) {
+        // Find sentences in the extracted context containing the topic keywords
+        const sentences = topicContext.context
+          .split(/(?<=[.?!])\s+/)
+          .map((s) => s.trim())
+          .filter((s) => s.length > 20 && s.length < 250);
+
+        const matchingSentence = sentences.find((s) => {
+          const sLower = s.toLowerCase();
+          return top.title
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((w) => w.length > 3)
+            .some((w) => sLower.includes(w));
+        });
+
+        if (matchingSentence) {
+          definitionSentence = matchingSentence;
+        }
+      }
+
+      front = `Explain the core definition, architecture, and mechanism of ${top.title}.`;
+      if (definitionSentence) {
+        back = `• Core Mechanism: ${definitionSentence}\n• Context: Key component of the ${finalTitle} curriculum.\n• Exam Objective: Be able to analyze how ${top.title} is utilized, identify associated security/performance trade-offs, and implement appropriate countermeasures.`;
+      } else {
+        back = `• Definition: ${top.title} represents a foundational topic in ${finalTitle}.\n• Operational Role: Governs protocol execution, verification boundaries, or algorithmic controls.\n• Exam Focus: Understand the theoretical principles, common failure modes, and defensive mitigations associated with ${top.title}.`;
+      }
     }
 
     return {

@@ -702,7 +702,8 @@ Grade objectively. Return JSON with:
     examTitle: string,
     examDateISO: string,
     estimatedWorkloadHours: number,
-    weakTopicIds: string[] = []
+    weakTopicIds: string[] = [],
+    moduleNames: string[] = []
   ): BackwardPlanStep[] {
     const today = new Date();
     const examDate = new Date(examDateISO);
@@ -713,6 +714,8 @@ Grade objectively. Return JSON with:
     const stepCount = Math.min(diffDays, Math.max(3, Math.ceil(estimatedWorkloadHours / 2.5)));
     const hoursPerStep = Math.round((estimatedWorkloadHours / stepCount) * 10) / 10;
 
+    const cleanModules = moduleNames.filter((m) => m && m.trim().length > 0);
+
     for (let i = 0; i < stepCount; i++) {
       const stepDate = new Date(today.getTime() + Math.floor((i / stepCount) * diffTime));
       const dateStr = stepDate.toISOString().split('T')[0];
@@ -722,19 +725,28 @@ Grade objectively. Return JSON with:
 
       if (i === stepCount - 1) {
         type = 'buffer';
-        title = `Final Formula Sheet & High-Yield Summary Review (${examTitle})`;
+        title = `Final High-Yield Review & Formula Sheet (${examTitle})`;
       } else if (i === stepCount - 2) {
         type = 'mock';
-        title = `Full Timed Simulation Exam & Mistake Audit`;
+        title = `Full Timed Simulation Exam & Error Analysis`;
       } else if (i > stepCount * 0.6) {
         type = 'review';
-        title = `Targeted Weak Spot Drill & Spaced Repetition Blitz`;
+        const modTitle = cleanModules.length > 0 ? cleanModules[i % cleanModules.length] : null;
+        title = modTitle
+          ? `Targeted Review & Active Recall: ${modTitle}`
+          : `Targeted Weak Spot Drill & Spaced Repetition Blitz`;
       } else if (i > stepCount * 0.3) {
         type = 'practice';
-        title = `Intensive Problem Sets & Retrieval Practice Questions`;
+        const modTitle = cleanModules.length > 0 ? cleanModules[i % cleanModules.length] : null;
+        title = modTitle
+          ? `Problem Sets & Retrieval Practice: ${modTitle}`
+          : `Intensive Problem Sets & Retrieval Practice Questions`;
       } else {
         type = 'learn';
-        title = `Deep Chapter Synthesis & Active Note Checkpoints`;
+        const modTitle = cleanModules.length > 0 ? cleanModules[i % cleanModules.length] : null;
+        title = modTitle
+          ? `Deep Synthesis & Active Notes: ${modTitle}`
+          : `Deep Chapter Synthesis & Active Note Checkpoints`;
       }
 
       steps.push({

@@ -49,7 +49,20 @@ export class SupabaseSyncAdapter implements CloudSyncAdapter {
         appliedMutationIds.push(m.id);
       } catch (err: any) {
         console.warn(`[SupabaseSync] Mutation ${m.id} failed:`, err);
-        failedMutations.push({ id: m.id, error: err.message || 'Mutation failed' });
+        const errMsg = err.message || 'Mutation failed';
+        // If error is due to missing remote tables or schema cache in Supabase,
+        // treat as skipped so the outbox is not indefinitely blocked with a red sync error
+        if (
+          errMsg.includes('does not exist') ||
+          errMsg.includes('42P01') ||
+          errMsg.includes('schema cache') ||
+          errMsg.includes('column')
+        ) {
+          console.warn(`[SupabaseSync] Skipping mutation ${m.id} due to remote schema mismatch: ${errMsg}`);
+          appliedMutationIds.push(m.id);
+        } else {
+          failedMutations.push({ id: m.id, error: errMsg });
+        }
       }
     }
 

@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 
 export const SyncStatusPill: React.FC = () => {
   const navigate = useNavigate();
-  const { diagnostics, pendingQueue, syncNow, forcePull } = useSyncStatus();
+  const { diagnostics, pendingQueue, syncNow, forcePull, clearQueue } = useSyncStatus();
   const [isOpen, setIsOpen] = useState(false);
   const [manualSyncing, setManualSyncing] = useState(false);
 
@@ -135,8 +135,18 @@ export const SyncStatusPill: React.FC = () => {
               )}
 
               {diagnostics.lastError && (
-                <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2 text-[11px] text-rose-300">
-                  {diagnostics.lastError}
+                <div className="rounded-lg bg-rose-500/10 border border-rose-500/20 p-2 text-[11px] text-rose-300 space-y-1.5">
+                  <div>{diagnostics.lastError}</div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearQueue();
+                    }}
+                    className="rounded bg-rose-500/20 px-2 py-0.5 text-[10px] font-semibold text-rose-200 hover:bg-rose-500/30"
+                  >
+                    Dismiss & Reset Outbox
+                  </button>
                 </div>
               )}
             </div>

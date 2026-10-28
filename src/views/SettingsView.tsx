@@ -192,6 +192,7 @@ export const SettingsView: React.FC = () => {
     } catch (err) {
       console.warn('Cloud purge during factory reset encountered an issue:', err);
     } finally {
+      clearQueue();
       storage.resetToDefault();
       window.location.reload();
     }
