@@ -58,50 +58,90 @@ export const ResourceLibraryView: React.FC = () => {
     return matchesSearch && matchesType;
   });
 
-  const handleFileUpload = async (file: File) => {
-    setIsParsing(true);
-    setParseStatus(`Parsing ${file.name} (extracting pages, text, and structure)...`);
-    try {
-      const doc = await parseUploadedDocument(file);
+  const MAX_BATCH_FILES = 10;
+  const MAX_FILE_SIZE_MB = 30;
+  const MAX_TOTAL_SIZE_MB = 100;
 
-      // Check duplicates by title or file hash
-      const duplicate = resources.find(
-        (r) => r.fileHash === doc.fileHash || r.title.toLowerCase() === doc.title.toLowerCase()
-      );
-      if (duplicate) {
-        alert(`Document "${doc.title}" is already in your library!`);
+  const handleFileUpload = async (fileInput: FileList | File[] | File) => {
+    const rawFiles = fileInput instanceof File ? [fileInput] : Array.from(fileInput);
+    if (rawFiles.length === 0) return;
+
+    if (rawFiles.length > MAX_BATCH_FILES) {
+      alert(`Upload limit: Maximum ${MAX_BATCH_FILES} files allowed per batch. You selected ${rawFiles.length}.`);
+      return;
+    }
+
+    let totalBytes = 0;
+    for (const f of rawFiles) {
+      if (f.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+        alert(`"${f.name}" exceeds the ${MAX_FILE_SIZE_MB}MB size limit.`);
         return;
       }
+      totalBytes += f.size;
+    }
 
-      const res: Resource = {
-        id: `res-${Date.now()}`,
-        title: doc.title,
-        type: doc.type,
-        extractedText: doc.extractedText,
-        extractedSections: doc.sections,
-        fileHash: doc.fileHash,
-        fileSize: doc.fileSize,
-        subjectId: newSubjectId || subjects[0]?.id,
-        tags: [
-          doc.type.toUpperCase(),
-          doc.pageCount ? `${doc.pageCount} Pages` : `${doc.wordCount.toLocaleString()} Words`,
-          'Direct Upload',
-        ],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+    if (totalBytes > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
+      alert(`Total batch size exceeds the ${MAX_TOTAL_SIZE_MB}MB limit.`);
+      return;
+    }
 
-      storage.saveResource(res);
-      storage.addXP(35, `Imported document "${file.name}"`);
-      storage.createNotification({
-        title: 'Resource Imported',
-        message: `Extracted ${doc.pageCount ? `${doc.pageCount} pages, ` : ''}${doc.wordCount.toLocaleString()} words from ${file.name}. Ready for AI tutoring and grounding.`,
-        category: 'system',
-      });
-      setShowAddModal(false);
+    setIsParsing(true);
+    let successCount = 0;
+
+    try {
+      for (let i = 0; i < rawFiles.length; i++) {
+        const file = rawFiles[i];
+        setParseStatus(`Parsing ${i + 1} of ${rawFiles.length}: "${file.name}"...`);
+
+        try {
+          const doc = await parseUploadedDocument(file);
+
+          // Check duplicates by title or file hash
+          const duplicate = resources.find(
+            (r) => r.fileHash === doc.fileHash || r.title.toLowerCase() === doc.title.toLowerCase()
+          );
+          if (duplicate) {
+            console.log(`Document "${doc.title}" is already in your library.`);
+            continue;
+          }
+
+          const res: Resource = {
+            id: `res-${Date.now()}-${i}`,
+            title: doc.title,
+            type: doc.type,
+            extractedText: doc.extractedText,
+            extractedSections: doc.sections,
+            fileHash: doc.fileHash,
+            fileSize: doc.fileSize,
+            subjectId: newSubjectId || subjects[0]?.id,
+            tags: [
+              doc.type.toUpperCase(),
+              doc.pageCount ? `${doc.pageCount} Pages` : `${doc.wordCount.toLocaleString()} Words`,
+              'Direct Upload',
+            ],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+
+          storage.saveResource(res);
+          storage.addXP(35, `Imported document "${file.name}"`);
+          successCount++;
+        } catch (fileErr) {
+          console.warn(`Failed to parse ${file.name}:`, fileErr);
+        }
+      }
+
+      if (successCount > 0) {
+        storage.createNotification({
+          title: 'Resources Imported',
+          message: `Successfully imported ${successCount} document${successCount > 1 ? 's' : ''} into your Resource Library. Ready for AI tutoring and grounding.`,
+          category: 'system',
+        });
+        setShowAddModal(false);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown extraction error';
-      alert(`Error reading file: ${msg}`);
+      alert(`Error reading files: ${msg}`);
     } finally {
       setIsParsing(false);
       setParseStatus('');
@@ -185,8 +225,9 @@ export const ResourceLibraryView: React.FC = () => {
         onDrop={(e) => {
           e.preventDefault();
           setIsDragging(false);
-          const files = Array.from(e.dataTransfer.files);
-          if (files[0]) handleFileUpload(files[0]);
+          if (e.dataTransfer.files?.length) {
+            handleFileUpload(e.dataTransfer.files);
+          }
         }}
         className={`relative flex flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition-all ${
           isDragging
@@ -215,17 +256,20 @@ export const ResourceLibraryView: React.FC = () => {
             </div>
             <label className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white">
               <FileUp className="h-4 w-4" />
-              <span>Browse File from Device</span>
+              <span>Browse Files from Device</span>
               <input
                 type="file"
+                multiple
                 accept=".pdf,.docx,.doc,.txt,.md,.markdown,.json,.py,.js,.ts,.cpp,.c,.java"
                 className="hidden"
                 onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFileUpload(file);
+                  if (e.target.files?.length) handleFileUpload(e.target.files);
                 }}
               />
             </label>
+            <span className="text-[10px] text-slate-500 mt-0.5">
+              Batch limit: Up to 10 files • Max 30MB each • 100MB total
+            </span>
           </div>
         )}
       </div>
@@ -358,14 +402,14 @@ export const ResourceLibraryView: React.FC = () => {
               <p className="text-[11px] text-slate-400 mt-0.5">Select any PDF, Word doc, or markdown file from your disk</p>
               <label className="mt-2.5 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-indigo-500">
                 <FileUp className="h-3.5 w-3.5" />
-                <span>Choose File to Auto-Extract</span>
+                <span>Choose Files to Auto-Extract</span>
                 <input
                   type="file"
+                  multiple
                   accept=".pdf,.docx,.doc,.txt,.md,.markdown,.json,.py,.js,.ts,.cpp,.c,.java"
                   className="hidden"
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileUpload(file);
+                    if (e.target.files?.length) handleFileUpload(e.target.files);
                   }}
                 />
               </label>

@@ -64,4 +64,22 @@ describe('Syllabus Importer Service', () => {
       expect(hierarchy.modules[4].title).toContain('AI in Cybersecurity');
     }
   });
+
+  it('supports multi-file course setup and enforces limits', async () => {
+    const { setupCourseFromSyllabus, UPLOAD_LIMITS } = await import('./syllabusImporter');
+    
+    expect(UPLOAD_LIMITS.MAX_FILES).toBe(10);
+    expect(UPLOAD_LIMITS.MAX_FILE_SIZE_MB).toBe(30);
+
+    const file1 = new File(['Course Code: CS101\nModule 1 Introduction to AI'], 'syllabus.txt', { type: 'text/plain' });
+    const file2 = new File(['Module 2 Deep Learning and Neural Nets'], 'unit2.txt', { type: 'text/plain' });
+
+    const result = await setupCourseFromSyllabus([file1, file2], '2026-11-30', 'Artificial Intelligence', 'CS101');
+    expect(result.subject.name).toBe('Artificial Intelligence');
+    expect(result.resources?.length).toBe(2);
+
+    // Test rejection when exceeding max files
+    const tooManyFiles = Array.from({ length: 11 }, (_, i) => new File(['note'], `note-${i}.txt`, { type: 'text/plain' }));
+    await expect(setupCourseFromSyllabus(tooManyFiles, '2026-11-30')).rejects.toThrow(/Maximum 10 files allowed/i);
+  });
 });

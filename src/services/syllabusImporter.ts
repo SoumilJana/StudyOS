@@ -24,7 +24,14 @@ export interface SyllabusImportResult {
   flashcards: Flashcard[];
   questions: Question[];
   resource: Resource;
+  resources?: Resource[];
 }
+
+export const UPLOAD_LIMITS = {
+  MAX_FILES: 10,
+  MAX_FILE_SIZE_MB: 30,
+  MAX_TOTAL_SIZE_MB: 100,
+};
 
 /**
  * Parses raw text extracted from a syllabus document and extracts course hierarchy
@@ -318,21 +325,52 @@ export function extractHierarchyFromSyllabusText(
 
 /**
  * End-to-End Orchestrator:
- * Ingests a syllabus file and exam date, and sets up the entire Study OS environment!
+ * Ingests one or multiple syllabus/lecture files and exam date, and sets up the entire Study OS environment!
  */
 export async function setupCourseFromSyllabus(
-  file: File,
+  fileInput: File | File[],
   examDateStr: string,
   customSubjectName?: string,
   customSubjectCode?: string
 ): Promise<SyllabusImportResult> {
-  // 1. Extract document text using client-side parser
-  const doc = await parseUploadedDocument(file);
+  const files = Array.isArray(fileInput) ? fileInput : [fileInput];
+  if (files.length === 0) throw new Error('No files provided for syllabus setup.');
+
+  if (files.length > UPLOAD_LIMITS.MAX_FILES) {
+    throw new Error(`Upload limit exceeded: Maximum ${UPLOAD_LIMITS.MAX_FILES} files allowed.`);
+  }
+
+  let totalSize = 0;
+  for (const f of files) {
+    if (f.size > UPLOAD_LIMITS.MAX_FILE_SIZE_MB * 1024 * 1024) {
+      throw new Error(`"${f.name}" exceeds the ${UPLOAD_LIMITS.MAX_FILE_SIZE_MB}MB file size limit.`);
+    }
+    totalSize += f.size;
+  }
+  if (totalSize > UPLOAD_LIMITS.MAX_TOTAL_SIZE_MB * 1024 * 1024) {
+    throw new Error(`Total batch size exceeds the ${UPLOAD_LIMITS.MAX_TOTAL_SIZE_MB}MB limit.`);
+  }
+
+  // 1. Extract document text from all files concurrently
+  const docs = await Promise.all(files.map((f) => parseUploadedDocument(f)));
+
+  // Identify the primary syllabus file (preferring explicit 'syllabus' in name)
+  const syllabusDocIdx = files.findIndex((f) =>
+    /syllabus|outline|curriculum|course_plan/i.test(f.name)
+  );
+  const primaryIdx = syllabusDocIdx >= 0 ? syllabusDocIdx : 0;
+  const primaryFile = files[primaryIdx];
+  const primaryDoc = docs[primaryIdx];
+
+  // Merge text from all files to ground full module coverage
+  const combinedText = docs
+    .map((d, i) => `=== DOCUMENT ${i + 1}: ${files[i].name} ===\n${d.extractedText}`)
+    .join('\n\n');
 
   // 2. Extract structured hierarchy
   const hierarchy = extractHierarchyFromSyllabusText(
-    doc.extractedText,
-    file.name.replace(/\.[^/.]+$/, '')
+    docs.length === 1 ? primaryDoc.extractedText : combinedText,
+    primaryFile.name.replace(/\.[^/.]+$/, '')
   );
   const finalTitle = customSubjectName?.trim() || hierarchy.courseTitle;
   const finalCode = customSubjectCode?.trim() || hierarchy.courseCode;
@@ -356,7 +394,7 @@ export async function setupCourseFromSyllabus(
     code: finalCode,
     color: '#6366f1',
     icon: 'Shield',
-    description: `Curriculum and exam roadmap generated from ${file.name}.`,
+    description: `Curriculum and exam roadmap generated from ${files.map((f) => f.name).join(', ')}.`,
     exams: [
       {
         id: existingSubject?.exams?.[0]?.id || `exam-${Date.now()}`,
@@ -373,22 +411,29 @@ export async function setupCourseFromSyllabus(
   };
   storage.saveSubject(subject);
 
-  // 4. Save Syllabus to Resource Library
-  const resourceId = `res-${Date.now()}`;
-  const resource: Resource = {
-    id: resourceId,
-    title: `${finalTitle} - Official Syllabus`,
-    type: 'pdf',
-    extractedText: doc.extractedText,
-    extractedSections: doc.sections,
-    fileHash: doc.fileHash,
-    fileSize: doc.fileSize,
-    subjectId: subject.id,
-    tags: ['Syllabus', 'Official Outline', `${doc.pageCount || 1} Pages`],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  storage.saveResource(resource);
+  // 4. Save each file to Resource Library
+  const savedResources: Resource[] = docs.map((doc, idx) => {
+    const f = files[idx];
+    const isPrimary = idx === primaryIdx;
+    const resId = `res-${Date.now()}-${idx}`;
+    const resource: Resource = {
+      id: resId,
+      title: `${finalTitle} - ${f.name.replace(/\.[^/.]+$/, '')}`,
+      type: (f.name.split('.').pop()?.toLowerCase() as any) || 'pdf',
+      extractedText: doc.extractedText,
+      extractedSections: doc.sections,
+      fileHash: doc.fileHash,
+      fileSize: doc.fileSize,
+      subjectId: subject.id,
+      tags: isPrimary
+        ? ['Syllabus', 'Core Curriculum', `${doc.pageCount || 1} Pages`]
+        : ['Study Material', 'Reference', `${doc.pageCount || 1} Pages`],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    storage.saveResource(resource);
+    return resource;
+  });
 
   // 5. Generate Exam Deadline & Backward Study Plan (Deduplicated)
   const allTopics = hierarchy.modules.flatMap((m) => m.chapters.flatMap((c) => c.topics));
@@ -666,6 +711,7 @@ export async function setupCourseFromSyllabus(
     deck,
     flashcards,
     questions,
-    resource,
+    resource: savedResources[0],
+    resources: savedResources,
   };
 }

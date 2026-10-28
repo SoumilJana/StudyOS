@@ -21,6 +21,9 @@ import {
   FileUp,
   Loader2,
   BookOpen,
+  X,
+  FileText,
+  AlertCircle,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
 import { setupCourseFromSyllabus } from '../services/syllabusImporter';
@@ -46,8 +49,9 @@ export const CommandCenterView: React.FC = () => {
 
   const [filterSubjectId] = useState<string>('all');
 
-  // Syllabus Setup Wizard State (for new/first-time users)
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  // Syllabus Setup Wizard State (supports single or multi-file uploads with limits)
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [courseTitle, setCourseTitle] = useState('');
   const [courseCode, setCourseCode] = useState('');
   const [examDate, setExamDate] = useState(() => {
@@ -58,22 +62,62 @@ export const CommandCenterView: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateStatus, setGenerateStatus] = useState('Extracting syllabus & planning...');
 
-  const handleFileSelect = (file: File) => {
-    setUploadedFile(file);
-    const rawName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-    if (!courseTitle) setCourseTitle(rawName);
-    const codeMatch = rawName.match(/\b([A-Z]{3,6}\d{3,4}[A-Z]?)\b/i);
-    if (!courseCode && codeMatch) {
-      setCourseCode(codeMatch[0].toUpperCase());
+  const MAX_FILES = 10;
+  const MAX_FILE_SIZE_MB = 30;
+  const MAX_TOTAL_SIZE_MB = 100;
+
+  const handleFilesSelect = (filesToAdd: FileList | File[]) => {
+    setUploadError(null);
+    const newArr = Array.from(filesToAdd);
+    const combined = [...uploadedFiles, ...newArr];
+
+    if (combined.length > MAX_FILES) {
+      setUploadError(`Upload limit: Maximum ${MAX_FILES} files allowed. You have ${combined.length}.`);
+      return;
+    }
+
+    let totalBytes = 0;
+    for (const f of combined) {
+      if (f.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+        setUploadError(`"${f.name}" exceeds the ${MAX_FILE_SIZE_MB}MB per-file size limit.`);
+        return;
+      }
+      totalBytes += f.size;
+    }
+
+    if (totalBytes > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
+      setUploadError(`Total batch size exceeds the ${MAX_TOTAL_SIZE_MB}MB safety limit.`);
+      return;
+    }
+
+    setUploadedFiles(combined);
+
+    // Auto-detect title & code from syllabus or primary file
+    const primary =
+      combined.find((f) => /syllabus|outline|curriculum/i.test(f.name)) || combined[0];
+    if (primary) {
+      const rawName = primary.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+      if (!courseTitle) setCourseTitle(rawName);
+      const codeMatch = rawName.match(/\b([A-Z]{3,6}\d{3,4}[A-Z]?)\b/i);
+      if (!courseCode && codeMatch) {
+        setCourseCode(codeMatch[0].toUpperCase());
+      }
     }
   };
 
+  const handleRemoveFile = (index: number) => {
+    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleGenerateCourse = async () => {
-    if (!uploadedFile) return;
+    if (uploadedFiles.length === 0) return;
     setIsGenerating(true);
-    setGenerateStatus('Extracting modules & chapters...');
+    setUploadError(null);
+    setGenerateStatus(
+      `Extracting ${uploadedFiles.length} document${uploadedFiles.length > 1 ? 's' : ''} & structuring syllabus...`
+    );
     try {
-      await setupCourseFromSyllabus(uploadedFile, examDate, courseTitle, courseCode);
+      await setupCourseFromSyllabus(uploadedFiles, examDate, courseTitle, courseCode);
       try {
         const confetti = (await import('canvas-confetti')).default;
         confetti({ particleCount: 75, spread: 70, origin: { y: 0.6 } });
@@ -82,7 +126,7 @@ export const CommandCenterView: React.FC = () => {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      alert(`Error generating course: ${msg}`);
+      setUploadError(msg);
     } finally {
       setIsGenerating(false);
     }
@@ -251,25 +295,78 @@ export const CommandCenterView: React.FC = () => {
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-            {/* 1. File Upload */}
-            <div className="md:col-span-1">
-              <label className="text-xs font-semibold text-slate-300 mb-1 block">1. Syllabus PDF / Notes</label>
-              <label className="flex flex-col items-center justify-center rounded-xl border border-dashed border-indigo-500/50 bg-indigo-500/5 p-4 text-center cursor-pointer hover:bg-indigo-500/10 transition-colors">
-                <Upload className="h-6 w-6 text-indigo-400" />
-                <span className="mt-1 text-xs font-semibold text-white truncate max-w-full px-2">
-                  {uploadedFile ? uploadedFile.name : 'Choose Syllabus PDF'}
+            {/* 1. File Upload (Multiple Files Supported) */}
+            <div className="md:col-span-1 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300">
+                  1. Syllabus & Lecture Notes ({uploadedFiles.length}/10)
+                </label>
+                <span className="text-[10px] text-slate-400 font-mono">Max 30MB/file</span>
+              </div>
+
+              <label
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  if (e.dataTransfer.files?.length) {
+                    handleFilesSelect(e.dataTransfer.files);
+                  }
+                }}
+                className="flex flex-col items-center justify-center rounded-xl border border-dashed border-indigo-500/50 bg-indigo-500/5 p-3.5 text-center cursor-pointer hover:bg-indigo-500/10 transition-colors"
+              >
+                <Upload className="h-5 w-5 text-indigo-400" />
+                <span className="mt-1 text-xs font-semibold text-white">
+                  {uploadedFiles.length > 0 ? '+ Add More Files' : 'Select or Drop Files'}
                 </span>
-                <span className="text-[10px] text-slate-400">Drag & drop or click</span>
+                <span className="text-[10px] text-slate-400">PDF, DOCX, TXT, MD (Up to 10 files)</span>
                 <input
                   type="file"
+                  multiple
                   accept=".pdf,.docx,.doc,.txt,.md"
                   className="hidden"
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileSelect(file);
+                    if (e.target.files?.length) handleFilesSelect(e.target.files);
                   }}
                 />
               </label>
+
+              {/* Uploaded Files Chips */}
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                  {uploadedFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between rounded-lg bg-slate-950/80 px-2.5 py-1.5 text-[11px] border border-slate-800"
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <FileText className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                        <span className="truncate text-slate-200">{file.name}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          ({(file.size / (1024 * 1024)).toFixed(1)}MB)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveFile(idx);
+                        }}
+                        className="text-slate-500 hover:text-rose-400 ml-1 rounded p-0.5"
+                        title="Remove file"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {uploadError && (
+                <div className="flex items-center gap-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 p-2 text-[11px] text-rose-300">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 text-rose-400" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
             </div>
 
             {/* 2. Course Name & Code */}
@@ -311,18 +408,22 @@ export const CommandCenterView: React.FC = () => {
               <button
                 type="button"
                 onClick={handleGenerateCourse}
-                disabled={!uploadedFile || isGenerating}
+                disabled={uploadedFiles.length === 0 || isGenerating}
                 className="w-full flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-xs font-bold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 disabled:opacity-50 transition-all"
               >
                 {isGenerating ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>{generateStatus}</span>
+                    <span className="truncate">{generateStatus}</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
-                    <span>Generate Complete Study OS Plan</span>
+                    <span>
+                      {uploadedFiles.length > 0
+                        ? `Generate Study OS Plan (${uploadedFiles.length} File${uploadedFiles.length > 1 ? 's' : ''})`
+                        : 'Select Files to Generate Plan'}
+                    </span>
                   </>
                 )}
               </button>

@@ -64,39 +64,56 @@ export const LearningStudioView: React.FC = () => {
     }
   }, []);
 
-  const handleFileUpload = async (file: File) => {
+  const handleFileUpload = async (fileInput: FileList | File[] | File) => {
+    const rawFiles = fileInput instanceof File ? [fileInput] : Array.from(fileInput);
+    if (rawFiles.length === 0) return;
+
+    if (rawFiles.length > 10) {
+      alert('Upload limit: Maximum 10 files allowed at once.');
+      return;
+    }
+
     setIsParsingDoc(true);
     try {
-      const doc = await parseUploadedDocument(file);
-      setGroundingText(doc.extractedText);
-      const titleLabel = `${doc.title} (${doc.pageCount ? `${doc.pageCount} pgs` : `${doc.wordCount.toLocaleString()} wds`})`;
+      const docs = await Promise.all(rawFiles.map((f) => parseUploadedDocument(f)));
+      const combinedText = docs
+        .map((d, i) => `=== SOURCE: ${rawFiles[i].name} ===\n${d.extractedText}`)
+        .join('\n\n');
+      setGroundingText(combinedText);
+      const titleLabel =
+        rawFiles.length === 1
+          ? `${docs[0].title} (${docs[0].pageCount ? `${docs[0].pageCount} pgs` : `${docs[0].wordCount.toLocaleString()} wds`})`
+          : `${rawFiles.length} Documents Combined (${rawFiles.map((f) => f.name).join(', ')})`;
       setUploadedFileName(titleLabel);
-      sessionStorage.setItem('study_os_active_grounding_text', doc.extractedText);
+      sessionStorage.setItem('study_os_active_grounding_text', combinedText);
       sessionStorage.setItem('study_os_active_grounding_title', titleLabel);
 
-      // Save to library for persistence
-      const res = {
-        id: `res-${Date.now()}`,
-        title: doc.title,
-        type: doc.type,
-        extractedText: doc.extractedText,
-        extractedSections: doc.sections,
-        fileHash: doc.fileHash,
-        fileSize: doc.fileSize,
-        subjectId: selectedSubjectId,
-        tags: [doc.type.toUpperCase(), 'Studio Grounding'],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      storage.saveResource(res);
+      // Save each to resource library
+      docs.forEach((doc, idx) => {
+        const res = {
+          id: `res-${Date.now()}-${idx}`,
+          title: doc.title,
+          type: doc.type,
+          extractedText: doc.extractedText,
+          extractedSections: doc.sections,
+          fileHash: doc.fileHash,
+          fileSize: doc.fileSize,
+          subjectId: selectedSubjectId,
+          tags: [doc.type.toUpperCase(), 'Studio Grounding'],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        storage.saveResource(res);
+      });
+
       storage.createNotification({
-        title: 'Study Material Grounded',
-        message: `Parsed ${file.name}. Tutor is now actively grounded in your source notes.`,
+        title: 'Study Materials Grounded',
+        message: `Parsed ${rawFiles.length} document${rawFiles.length > 1 ? 's' : ''}. Tutor is now actively grounded in your source notes.`,
         category: 'system',
       });
       // Re-trigger current step with grounding
       if (currentTopic && currentChapter) {
-        handleTeachStep(currentStepIndex, doc.extractedText);
+        handleTeachStep(currentStepIndex, combinedText);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -314,11 +331,11 @@ export const LearningStudioView: React.FC = () => {
                   <span className="text-[10px] text-slate-500">In-browser client-side parsing</span>
                   <input
                     type="file"
+                    multiple
                     accept=".pdf,.docx,.doc,.txt,.md,.markdown,.json,.py,.js,.ts,.cpp,.c,.java"
                     className="hidden"
                     onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleFileUpload(file);
+                      if (e.target.files?.length) handleFileUpload(e.target.files);
                     }}
                   />
                 </label>
