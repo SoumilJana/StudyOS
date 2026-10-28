@@ -73,7 +73,7 @@ export class CloudSyncService {
       });
 
       // 2. Sync Gamification Profile
-      await supabase.from('gamification_profiles').upsert({
+      await supabase.from('gamification_state').upsert({
         user_id: userId,
         xp: gamification.xp,
         level: gamification.level,
@@ -246,7 +246,7 @@ export class CloudSyncService {
 
       // 2. Fetch Gamification
       const { data: gamification } = await supabase
-        .from('gamification_profiles')
+        .from('gamification_state')
         .select('*')
         .eq('user_id', userId)
         .single();

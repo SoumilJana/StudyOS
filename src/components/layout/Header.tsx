@@ -20,6 +20,7 @@ import { useStudyOS } from '../../context/StudyOSContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../services/supabaseClient';
 import { AuthModal } from '../auth/AuthModal';
+import { SyncStatusPill } from '../sync/SyncStatusPill';
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -189,6 +190,9 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
               <span>Lv.{gamification.level}</span>
             </div>
           </div>
+
+          {/* Multi-Device Cloud Sync Status Pill */}
+          <SyncStatusPill />
 
           {/* Supabase Cloud Auth Button / Status */}
           {currentUser ? (

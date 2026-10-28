@@ -47,12 +47,13 @@ class AIService {
   ): Promise<TutoringResponse> {
     // 1. Try server-side Supabase Edge Function with OpenRouter free model
     try {
+      const activeModel = settings?.aiModel || storage.getSettings().aiModel;
       const serverResult = await invokeAIProxy('explain_stage', {
         chapterTitle,
         topicTitle,
         stepIndex,
         referenceContext: referenceDocumentText?.slice(0, 800),
-      });
+      }, activeModel);
 
       if (serverResult.data && serverResult.data.explanation) {
         return {
@@ -154,12 +155,13 @@ In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving bey
   ): Promise<Question[]> {
     // 1. Try server-side Supabase Edge Function
     try {
+      const activeModel = storage.getSettings().aiModel;
       const serverResult = await invokeAIProxy('generate_questions', {
         subjectName,
         topicTitle,
         count,
         difficulty,
-      });
+      }, activeModel);
 
       if (Array.isArray(serverResult.data) && serverResult.data.length > 0) {
         // Validate each question structure before returning
@@ -256,11 +258,12 @@ In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving bey
 
     // Try server-side Supabase Edge Function
     try {
+      const activeModel = storage.getSettings().aiModel;
       const serverResult = await invokeAIProxy('generate_flashcards', {
         subjectName,
         topicTitle,
         count,
-      });
+      }, activeModel);
 
       if (Array.isArray(serverResult.data) && serverResult.data.length > 0) {
         const validated = serverResult.data.map((c: any) => ({
@@ -339,11 +342,12 @@ In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving bey
 
     // Try server-side Supabase Edge Function
     try {
+      const activeModel = storage.getSettings().aiModel;
       const serverResult = await invokeAIProxy('grade_subjective', {
         prompt,
         rubricCriteria: defaultCriteria,
         userAnswer,
-      });
+      }, activeModel);
 
       if (serverResult.data && typeof serverResult.data.scoreAwarded === 'number') {
         return {

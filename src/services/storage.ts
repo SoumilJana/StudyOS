@@ -148,6 +148,22 @@ class StudyOSStorage {
     return () => this.listeners.delete(listener);
   }
 
+  private onMutationHook?: (entityType: any, entityId: string, operation: 'create' | 'update' | 'delete', payload: any) => void;
+
+  public setMutationHook(hook: (entityType: any, entityId: string, operation: 'create' | 'update' | 'delete', payload: any) => void): void {
+    this.onMutationHook = hook;
+  }
+
+  private emitMutation(entityType: any, entityId: string, operation: 'create' | 'update' | 'delete', payload: any): void {
+    if (this.onMutationHook) {
+      try {
+        this.onMutationHook(entityType, entityId, operation, payload);
+      } catch (e) {
+        console.warn('[Storage] Mutation hook error:', e);
+      }
+    }
+  }
+
   private notify() {
     this.listeners.forEach((cb) => {
       try {
@@ -197,6 +213,7 @@ class StudyOSStorage {
     }
 
     this.saveToStorage('study_os_gamification', this.gamification);
+    this.emitMutation('gamification', 'current', 'update', this.gamification);
     this.notify();
   }
 
@@ -253,6 +270,7 @@ class StudyOSStorage {
   public updateSettings(newSettings: Partial<UserSettings>): void {
     this.settings = { ...this.settings, ...newSettings };
     this.saveToStorage('study_os_settings', this.settings);
+    this.emitMutation('settings', 'current', 'update', this.settings);
     this.notify();
   }
 
@@ -385,6 +403,7 @@ class StudyOSStorage {
 
   public saveDeadline(deadline: Deadline): void {
     const index = this.deadlines.findIndex((d) => d.id === deadline.id);
+    const op = index >= 0 ? 'update' : 'create';
     if (index >= 0) {
       this.deadlines[index] = deadline;
     } else {
@@ -392,12 +411,14 @@ class StudyOSStorage {
       this.addXP(25, 'Created planned deadline');
     }
     this.saveToStorage('study_os_deadlines', this.deadlines);
+    this.emitMutation('deadline', deadline.id, op, deadline);
     this.notify();
   }
 
   public deleteDeadline(id: string): void {
     this.deadlines = this.deadlines.filter((d) => d.id !== id);
     this.saveToStorage('study_os_deadlines', this.deadlines);
+    this.emitMutation('deadline', id, 'delete', null);
     this.notify();
   }
 
@@ -421,6 +442,7 @@ class StudyOSStorage {
 
   public saveProject(project: Project): void {
     const index = this.projects.findIndex((p) => p.id === project.id);
+    const op = index >= 0 ? 'update' : 'create';
     if (index >= 0) {
       this.projects[index] = project;
     } else {
@@ -428,12 +450,14 @@ class StudyOSStorage {
       this.addXP(30, 'Created new project');
     }
     this.saveToStorage('study_os_projects', this.projects);
+    this.emitMutation('project', project.id, op, project);
     this.notify();
   }
 
   public deleteProject(id: string): void {
     this.projects = this.projects.filter((p) => p.id !== id);
     this.saveToStorage('study_os_projects', this.projects);
+    this.emitMutation('project', id, 'delete', null);
     this.notify();
   }
 
@@ -443,12 +467,14 @@ class StudyOSStorage {
 
   public saveTask(task: Task): void {
     const index = this.tasks.findIndex((t) => t.id === task.id);
+    const op = index >= 0 ? 'update' : 'create';
     if (index >= 0) {
       this.tasks[index] = task;
     } else {
       this.tasks.push(task);
     }
     this.saveToStorage('study_os_tasks', this.tasks);
+    this.emitMutation('task', task.id, op, task);
     this.notify();
   }
 
@@ -471,6 +497,7 @@ class StudyOSStorage {
   public deleteTask(id: string): void {
     this.tasks = this.tasks.filter((t) => t.id !== id);
     this.saveToStorage('study_os_tasks', this.tasks);
+    this.emitMutation('task', id, 'delete', null);
     this.notify();
   }
 
@@ -483,12 +510,14 @@ class StudyOSStorage {
 
   public saveDeck(deck: FlashcardDeck): void {
     const index = this.decks.findIndex((d) => d.id === deck.id);
+    const op = index >= 0 ? 'update' : 'create';
     if (index >= 0) {
       this.decks[index] = deck;
     } else {
       this.decks.push(deck);
     }
     this.saveToStorage('study_os_decks', this.decks);
+    this.emitMutation('deck', deck.id, op, deck);
     this.notify();
   }
 
@@ -498,18 +527,21 @@ class StudyOSStorage {
 
   public saveFlashcard(card: Flashcard): void {
     const index = this.flashcards.findIndex((c) => c.id === card.id);
+    const op = index >= 0 ? 'update' : 'create';
     if (index >= 0) {
       this.flashcards[index] = card;
     } else {
       this.flashcards.push(card);
     }
     this.saveToStorage('study_os_flashcards', this.flashcards);
+    this.emitMutation('flashcard', card.id, op, card);
     this.notify();
   }
 
   public deleteFlashcard(id: string): void {
     this.flashcards = this.flashcards.filter((c) => c.id !== id);
     this.saveToStorage('study_os_flashcards', this.flashcards);
+    this.emitMutation('flashcard', id, 'delete', null);
     this.notify();
   }
 
@@ -682,6 +714,7 @@ class StudyOSStorage {
   public logFocusSession(session: FocusSession): void {
     this.focusSessions.push(session);
     this.saveToStorage('study_os_focus_sessions', this.focusSessions);
+    this.emitMutation('focusSession', session.id, 'create', session);
 
     // Also automatically create an aligned TimeLog so reports reflect it,
     // explicitly referencing linkedFocusSessionId to PREVENT double counting!
@@ -715,18 +748,21 @@ class StudyOSStorage {
 
   public saveTimeLog(log: TimeLog): void {
     const index = this.timeLogs.findIndex((t) => t.id === log.id);
+    const op = index >= 0 ? 'update' : 'create';
     if (index >= 0) {
       this.timeLogs[index] = log;
     } else {
       this.timeLogs.push(log);
     }
     this.saveToStorage('study_os_time_logs', this.timeLogs);
+    this.emitMutation('timeLog', log.id, op, log);
     this.notify();
   }
 
   public deleteTimeLog(id: string): void {
     this.timeLogs = this.timeLogs.filter((t) => t.id !== id);
     this.saveToStorage('study_os_time_logs', this.timeLogs);
+    this.emitMutation('timeLog', id, 'delete', null);
     this.notify();
   }
 
