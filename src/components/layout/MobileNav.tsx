@@ -13,11 +13,11 @@ export const MobileNav: React.FC = () => {
   const { dueFlashcardsCount, weakTopics } = useStudyOS();
 
   const items = [
-    { to: '/', label: 'Overview', icon: LayoutDashboard },
-    { to: '/arena', label: 'Arena', icon: Swords, alert: weakTopics.length > 0 },
+    { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/arena', label: 'Quizzes', icon: Swords, alert: weakTopics.length > 0 },
     { to: '/focus', label: 'Focus', icon: Hourglass },
     { to: '/workbench', label: 'Tasks', icon: Briefcase },
-    { to: '/calendar', label: 'Revision', icon: CalendarCheck2, alert: dueFlashcardsCount > 0 },
+    { to: '/calendar', label: 'Calendar', icon: CalendarCheck2, alert: dueFlashcardsCount > 0 },
   ];
 
   return (

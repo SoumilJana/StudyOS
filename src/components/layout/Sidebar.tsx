@@ -49,125 +49,149 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return days > 0 ? `${days}d` : 'Today';
   };
 
-  const navItems = [
+  const navSections = [
     {
-      to: '/',
-      label: 'Command Center',
-      icon: LayoutDashboard,
-      badge: null,
+      title: 'CORE',
+      items: [
+        {
+          to: '/',
+          label: 'Dashboard',
+          icon: LayoutDashboard,
+          badge: null,
+        },
+        {
+          to: '/deadlines',
+          label: 'Deadlines & Schedule',
+          icon: ClockAlert,
+          badge: getNearestDeadlineDays(),
+          badgeColor: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
+        },
+        {
+          to: '/workbench',
+          label: 'Tasks',
+          icon: Briefcase,
+          badge: activeTasksCount > 0 ? `${activeTasksCount}` : null,
+          badgeColor: 'bg-slate-700/50 text-slate-300',
+        },
+      ],
     },
     {
-      to: '/learning',
-      label: 'Learning Studio',
-      icon: GraduationCap,
-      badge: null,
+      title: 'STUDY',
+      items: [
+        {
+          to: '/learning',
+          label: 'Course Materials',
+          icon: GraduationCap,
+          badge: null,
+        },
+        {
+          to: '/arena',
+          label: 'Practice Quizzes',
+          icon: Swords,
+          badge: weakTopics.length > 0 ? `${weakTopics.length} weak` : null,
+          badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
+        },
+        {
+          to: '/memory',
+          label: 'Flashcards',
+          icon: BrainCircuit,
+          badge: dueFlashcardsCount > 0 ? `${dueFlashcardsCount} due` : null,
+          badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+        },
+        {
+          to: '/focus',
+          label: 'Focus Timer',
+          icon: Hourglass,
+          badge: null,
+        },
+        {
+          to: '/calendar',
+          label: 'Calendar',
+          icon: CalendarCheck2,
+          badge: dueRevisionsToday.length > 0 ? `${dueRevisionsToday.length}` : null,
+          badgeColor: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30',
+        },
+      ],
     },
     {
-      to: '/arena',
-      label: 'Exam Arena',
-      icon: Swords,
-      badge: weakTopics.length > 0 ? `${weakTopics.length} weak` : null,
-      badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
-    },
-    {
-      to: '/memory',
-      label: 'Memory Lab',
-      icon: BrainCircuit,
-      badge: dueFlashcardsCount > 0 ? `${dueFlashcardsCount} due` : null,
-      badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
-    },
-    {
-      to: '/calendar',
-      label: 'Revision Calendar',
-      icon: CalendarCheck2,
-      badge: dueRevisionsToday.length > 0 ? `${dueRevisionsToday.length}` : null,
-      badgeColor: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30',
-    },
-    {
-      to: '/deadlines',
-      label: 'Deadline Planner',
-      icon: ClockAlert,
-      badge: getNearestDeadlineDays(),
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
-    },
-    {
-      to: '/focus',
-      label: 'Focus Room',
-      icon: Hourglass,
-      badge: null,
-    },
-    {
-      to: '/time',
-      label: 'Time Intelligence',
-      icon: Activity,
-      badge: null,
-    },
-    {
-      to: '/workbench',
-      label: 'Workbench',
-      icon: Briefcase,
-      badge: activeTasksCount > 0 ? `${activeTasksCount}` : null,
-      badgeColor: 'bg-slate-700/50 text-slate-300',
-    },
-    {
-      to: '/resources',
-      label: 'Resource Library',
-      icon: FolderArchive,
-      badge: null,
-    },
-    {
-      to: '/analytics',
-      label: 'Analytics',
-      icon: BarChart3,
-      badge: null,
-    },
-    {
-      to: '/settings',
-      label: 'Settings',
-      icon: Settings,
-      badge: null,
+      title: 'SYSTEM',
+      items: [
+        {
+          to: '/resources',
+          label: 'Library',
+          icon: FolderArchive,
+          badge: null,
+        },
+        {
+          to: '/time',
+          label: 'Time Logs',
+          icon: Activity,
+          badge: null,
+        },
+        {
+          to: '/analytics',
+          label: 'Analytics',
+          icon: BarChart3,
+          badge: null,
+        },
+        {
+          to: '/settings',
+          label: 'Settings',
+          icon: Settings,
+          badge: null,
+        },
+      ],
     },
   ];
 
   const sidebarContent = (
     <div className="flex h-full flex-col justify-between border-r border-slate-800 bg-slate-950/90 text-slate-300">
       <div className="flex-1 overflow-y-auto px-2 py-4">
-        {/* Workspace List */}
-        <div className="space-y-1">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                onClick={() => onCloseMobile?.()}
-                className={({ isActive }) =>
-                  `group flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
-                    isActive
-                      ? 'bg-indigo-600/15 text-indigo-400 font-semibold border-l-2 border-indigo-500 shadow-sm'
-                      : 'text-slate-400 hover:bg-slate-900/80 hover:text-slate-200'
-                  }`
-                }
-              >
-                <Icon className={`h-4 w-4 shrink-0 transition-transform group-hover:scale-105`} />
-                {!collapsed && (
-                  <div className="flex flex-1 items-center justify-between overflow-hidden">
-                    <span className="truncate">{item.label}</span>
-                    {item.badge && (
-                      <span
-                        className={`ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-mono font-medium ${
-                          item.badgeColor || 'bg-slate-800 text-slate-300'
-                        }`}
-                      >
-                        {item.badge}
-                      </span>
+        {/* Workspace Groups */}
+        <div className="space-y-4">
+          {navSections.map((section, sIdx) => (
+            <div key={sIdx} className="space-y-1">
+              {!collapsed && (
+                <div className="px-3 pb-1 text-[10px] font-bold tracking-wider text-slate-500">
+                  {section.title}
+                </div>
+              )}
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === '/'}
+                    onClick={() => onCloseMobile?.()}
+                    className={({ isActive }) =>
+                      `group flex items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-all ${
+                        isActive
+                          ? 'bg-indigo-600/15 text-indigo-400 font-semibold border-l-2 border-indigo-500 shadow-sm'
+                          : 'text-slate-400 hover:bg-slate-900/80 hover:text-slate-200'
+                      }`
+                    }
+                  >
+                    <Icon className="h-4 w-4 shrink-0 transition-transform group-hover:scale-105" />
+                    {!collapsed && (
+                      <div className="flex flex-1 items-center justify-between overflow-hidden">
+                        <span className="truncate">{item.label}</span>
+                        {item.badge && (
+                          <span
+                            className={`ml-1.5 rounded px-1.5 py-0.5 text-[10px] font-mono font-medium ${
+                              item.badgeColor || 'bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
                     )}
-                  </div>
-                )}
-              </NavLink>
-            );
-          })}
+                  </NavLink>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
 
