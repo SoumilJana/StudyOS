@@ -20,6 +20,7 @@ import {
 import { useStudyOS } from '../context/StudyOSContext';
 import { useAuth } from '../context/AuthContext';
 import { aiService, TutoringResponse } from '../services/aiService';
+import { STAGE_SUBTITLES } from '../services/materialTeachingSynthesizer';
 import { storage } from '../services/storage';
 import { parseUploadedDocument } from '../services/documentExtractor';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
@@ -174,8 +175,15 @@ export const LearningStudioView: React.FC = () => {
   }
 
   // Fetch or trigger step
-  const handleTeachStep = async (stepIdx: number, overrideText?: string) => {
-    if (!currentTopic || !currentChapter) return;
+  const handleTeachStep = async (
+    stepIdx: number,
+    overrideText?: string,
+    overrideTopic?: any,
+    overrideChap?: any
+  ) => {
+    const topicToUse = overrideTopic || currentTopic;
+    const chapToUse = overrideChap || currentChapter;
+    if (!topicToUse || !chapToUse) return;
     setLoading(true);
     setCurrentStepIndex(stepIdx);
     setUserSelectedOption(null);
@@ -186,8 +194,8 @@ export const LearningStudioView: React.FC = () => {
     try {
       const activeText = overrideText !== undefined ? overrideText : groundingText;
       const response = await aiService.explainChapterTopic(
-        currentChapter.title,
-        currentTopic.title,
+        chapToUse.title,
+        topicToUse.title,
         stepIdx,
         settings,
         activeText || undefined
@@ -489,7 +497,7 @@ export const LearningStudioView: React.FC = () => {
                               onClick={() => {
                                 setSelectedTopicId(t.id);
                                 setMobileTreeOpen(false);
-                                handleTeachStep(0);
+                                handleTeachStep(0, undefined, t, chap);
                               }}
                               className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition-all ${
                                 isSelected
@@ -516,20 +524,30 @@ export const LearningStudioView: React.FC = () => {
         {/* Right 3 Cols: Active Tutoring Studio */}
         <div className="space-y-6 lg:col-span-3">
           {/* Step Progression Bar */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar rounded-2xl border border-slate-800 bg-slate-900/50 p-2 sm:flex-wrap">
-            {stepLabels.map((lbl, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleTeachStep(idx)}
-                className={`shrink-0 sm:flex-1 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
-                  currentStepIndex === idx
-                    ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
-                    : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
-                }`}
-              >
-                {lbl}
-              </button>
-            ))}
+          <div className="space-y-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 px-1">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400">
+                Cognitive Stage {currentStepIndex + 1} of 6: {stepLabels[currentStepIndex].replace(/^[0-9.]+\s*/, '')}
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {STAGE_SUBTITLES[currentStepIndex]}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar rounded-2xl border border-slate-800 bg-slate-900/50 p-2 sm:flex-wrap">
+              {stepLabels.map((lbl, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleTeachStep(idx)}
+                  className={`shrink-0 sm:flex-1 whitespace-nowrap rounded-xl px-3 py-1.5 text-xs font-medium transition-all ${
+                    currentStepIndex === idx
+                      ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
+                      : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Topic Detail Header */}
