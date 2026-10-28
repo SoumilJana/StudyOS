@@ -16,6 +16,8 @@ import { storage } from './storage';
 import { aiService } from './aiService';
 import { parseUploadedDocument } from './documentExtractor';
 import { extractTopicContext } from './topicExtractor';
+import { generateCuratedQuestionsForTopics } from './questionBankGenerator';
+import { generateCuratedFlashcardsForTopics } from './flashcardBankGenerator';
 
 export interface SyllabusImportResult {
   subject: Subject;
@@ -508,211 +510,21 @@ export async function setupCourseFromSyllabus(
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Specific high-yield prompts for key topics
-  const flashcards: Flashcard[] = allTopics.map((top, idx) => {
-    const lTitle = top.title.toLowerCase();
-    let front = `What is ${top.title}, and what is its operational function in ${finalTitle}?`;
-    let back = '';
-
-    if (lTitle.includes('kill chain')) {
-      front = 'List the 7 phases of the Lockheed Martin Cyber Kill Chain in chronological order.';
-      back = '1. Reconnaissance, 2. Weaponization, 3. Delivery, 4. Exploitation, 5. Installation, 6. Command & Control (C2), 7. Actions on Objectives.';
-    } else if (lTitle.includes('reconnaissance') || lTitle.includes('footprinting')) {
-      front = 'Contrast Passive Reconnaissance with Active Reconnaissance, and name one standard tool for each.';
-      back = 'Passive Recon gathers intelligence without directly transmitting packets to the target (e.g. WHOIS, OSINT, Shodan). Active Recon probes the target directly (e.g. Nmap SYN scan, banner grabbing).';
-    } else if (lTitle.includes('sql') || lTitle.includes('injection')) {
-      front = 'What is the root cause of SQL Injection (SQLi) and what is the primary defensive mitigation?';
-      back = 'Root cause: Unsanitized user inputs concatenated directly into dynamic SQL queries. Primary mitigation: Parameterized queries (Prepared Statements) and stored procedures.';
-    } else if (lTitle.includes('privilege escalation')) {
-      front = 'Define Horizontal vs. Vertical Privilege Escalation.';
-      back = 'Horizontal: An attacker gains access to resources belonging to another user with the same privilege level. Vertical: An attacker elevates access from a low-privileged account to administrative/root/SYSTEM privileges.';
-    } else if (lTitle.includes('wireless') || lTitle.includes('wpa')) {
-      front = 'Explain the security vulnerability that enables offline 4-way handshake cracking in WPA2-PSK.';
-      back = 'WPA2 4-way handshakes use a pre-shared key (PSK) to derive the Pairwise Transient Key (PTK). An attacker capturing the handshake can compute offline dictionary/brute-force attacks against the PMK.';
-    } else if (lTitle.includes('metasploit')) {
-      front = 'In the Metasploit Framework, explain the difference between an Exploit and a Payload.';
-      back = 'Exploit: The software sequence that takes advantage of a specific vulnerability to gain unauthorized access. Payload: The code that executes on the target system after the vulnerability is successfully exploited (e.g. Meterpreter reverse shell).';
-    } else if (lTitle.includes('nmap') || lTitle.includes('scanning')) {
-      front = 'Explain how a TCP SYN Stealth Scan (Nmap -sS) operates and why it is termed "half-open".';
-      back = 'The scanner sends a SYN packet. If the port is open, the target replies with SYN-ACK. The scanner immediately sends an RST (Reset) instead of completing the 3-way handshake with an ACK, avoiding a fully established connection in application logs.';
-    } else if (lTitle.includes('dos') || lTitle.includes('denial of service')) {
-      front = 'What distinguishes a Denial of Service (DoS) attack from a Distributed Denial of Service (DDoS) attack?';
-      back = 'DoS originates from a single source host or IP targeting system availability. DDoS leverages a coordinated network of compromised botnets/zombies across multiple geographies, making rate-limiting and IP blacklisting significantly harder.';
-    } else if (lTitle.includes('firewall') || lTitle.includes('ids') || lTitle.includes('ips')) {
-      front = 'Compare the operational distinction between an IDS (Intrusion Detection System) and an IPS (Intrusion Prevention System).';
-      back = 'An IDS passively inspects network traffic copies and raises alerts on suspicious signatures (out-of-band). An IPS sits inline with traffic flow and actively drops malicious packets or blocks offending IP addresses in real time.';
-    } else if (lTitle.includes('crypto') || lTitle.includes('cipher')) {
-      front = 'Explain the fundamental difference between Symmetric and Asymmetric Encryption.';
-      back = 'Symmetric uses a single shared secret key for both encryption and decryption (e.g. AES). Asymmetric uses a mathematically linked public-private key pair where data encrypted with the public key can only be decrypted by the private key (e.g. RSA, ECC).';
-    } else if (lTitle.includes('ai in cybersecurity') || lTitle.includes('prompt injection')) {
-      front = 'What is Prompt Injection in LLM-assisted security systems, and how does it compromise automated workflows?';
-      back = 'Prompt Injection occurs when untrusted user input manipulates the LLM into disregarding developer instructions, causing unauthorized tool execution, privilege bypass, or sensitive data exfiltration.';
-    } else {
-      // Ground the card in the uploaded document text if possible
-      const topicContext = extractTopicContext(combinedText, top.title, finalTitle, 2000);
-      let definitionSentence = '';
-
-      if (topicContext.context) {
-        // Find sentences in the extracted context containing the topic keywords
-        const sentences = topicContext.context
-          .split(/(?<=[.?!])\s+/)
-          .map((s) => s.trim())
-          .filter((s) => s.length > 20 && s.length < 250);
-
-        const matchingSentence = sentences.find((s) => {
-          const sLower = s.toLowerCase();
-          return top.title
-            .toLowerCase()
-            .split(/\s+/)
-            .filter((w) => w.length > 3)
-            .some((w) => sLower.includes(w));
-        });
-
-        if (matchingSentence) {
-          definitionSentence = matchingSentence;
-        }
-      }
-
-      front = `Explain the core definition, architecture, and mechanism of ${top.title}.`;
-      if (definitionSentence) {
-        back = `• Core Mechanism: ${definitionSentence}\n• Context: Key component of the ${finalTitle} curriculum.\n• Exam Objective: Be able to analyze how ${top.title} is utilized, identify associated security/performance trade-offs, and implement appropriate countermeasures.`;
-      } else {
-        back = `• Definition: ${top.title} represents a foundational topic in ${finalTitle}.\n• Operational Role: Governs protocol execution, verification boundaries, or algorithmic controls.\n• Exam Focus: Understand the theoretical principles, common failure modes, and defensive mitigations associated with ${top.title}.`;
-      }
-    }
-
-    return {
-      id: `card-${Date.now()}-${idx}`,
-      deckId: deck.id,
-      subjectId: subject.id,
-      topicId: top.id,
-      front,
-      back,
-      format: 'concept' as CardFormat,
-      state: 'new' as CardState,
-      intervalDays: 1,
-      easeFactor: 2.5,
-      repetitions: 0,
-      lapses: 0,
-      dueDate: todayStr,
-      tags: [finalCode, top.title],
-      reviewHistory: [],
-      createdAt: new Date().toISOString(),
-    };
-  });
+  const flashcards: Flashcard[] = generateCuratedFlashcardsForTopics(
+    subject,
+    deck,
+    hierarchy.modules,
+    combinedText
+  );
 
   flashcards.forEach((c) => storage.saveFlashcard(c));
 
-  // 7. Generate High-Stakes Practice Questions for Exam Arena
-  const questions: Question[] = [
-    {
-      id: `q-${Date.now()}-1`,
-      subjectId: subject.id,
-      type: 'mcq_single',
-      prompt: 'During which phase of the Lockheed Martin Cyber Kill Chain does an attacker package an exploit with a backdoor into an email PDF attachment?',
-      options: [
-        { id: 'opt-a', text: 'Reconnaissance' },
-        { id: 'opt-b', text: 'Weaponization' },
-        { id: 'opt-c', text: 'Exploitation' },
-        { id: 'opt-d', text: 'Command & Control' },
-      ],
-      correctAnswer: 'opt-b',
-      explanation: 'Weaponization is the phase where the attacker pairs the exploit code with an actionable payload/backdoor to create a deliverable malware artifact.',
-      difficulty: 2,
-      marks: 2,
-      negativeMarks: 0.5,
-      tags: [finalCode, 'Cyber Kill Chain', 'Phase 2'],
-    },
-    {
-      id: `q-${Date.now()}-2`,
-      subjectId: subject.id,
-      type: 'mcq_single',
-      prompt: 'An administrator notices that an attacker has gained access to a standard employee account and used sudo misconfigurations to gain UID 0 (root). What type of attack is this?',
-      options: [
-        { id: 'opt-a', text: 'Horizontal Privilege Escalation' },
-        { id: 'opt-b', text: 'Vertical Privilege Escalation' },
-        { id: 'opt-c', text: 'ARP Cache Poisoning' },
-        { id: 'opt-d', text: 'Cross-Site Request Forgery' },
-      ],
-      correctAnswer: 'opt-b',
-      explanation: 'Vertical Privilege Escalation refers to elevating permissions from a restricted, non-privileged user account to administrative or root level.',
-      difficulty: 2,
-      marks: 2,
-      negativeMarks: 0.5,
-      tags: [finalCode, 'Privilege Escalation', 'System Hacking'],
-    },
-    {
-      id: `q-${Date.now()}-3`,
-      subjectId: subject.id,
-      type: 'mcq_single',
-      prompt: 'Which Nmap scanning flag executes a TCP SYN Stealth scan without completing the full 3-way TCP handshake?',
-      options: [
-        { id: 'opt-a', text: '-sT' },
-        { id: 'opt-b', text: '-sS' },
-        { id: 'opt-c', text: '-sU' },
-        { id: 'opt-d', text: '-sA' },
-      ],
-      correctAnswer: 'opt-b',
-      explanation: '-sS sends a SYN packet and listens for SYN/ACK or RST, resetting the connection before completion to minimize logging by rudimentary connection filters.',
-      difficulty: 3,
-      marks: 2,
-      negativeMarks: 0.5,
-      tags: [finalCode, 'Nmap', 'Scanning & Enumeration'],
-    },
-    {
-      id: `q-${Date.now()}-4`,
-      subjectId: subject.id,
-      type: 'mcq_single',
-      prompt: 'Which security mechanism is the most effective architectural control against SQL Injection vulnerabilities?',
-      options: [
-        { id: 'opt-a', text: 'Client-side JavaScript input validation' },
-        { id: 'opt-b', text: 'Parameterized queries (Prepared Statements)' },
-        { id: 'opt-c', text: 'Escaping single quotes using custom regex replacements' },
-        { id: 'opt-d', text: 'Hashing all incoming query strings with SHA-256' },
-      ],
-      correctAnswer: 'opt-b',
-      explanation: 'Parameterized queries strictly decouple the SQL code from user-supplied parameters, ensuring the database compiler treats inputs as data literals rather than executable code.',
-      difficulty: 2,
-      marks: 2,
-      negativeMarks: 0.5,
-      tags: [finalCode, 'Web Security', 'SQLi Defenses'],
-    },
-    {
-      id: `q-${Date.now()}-5`,
-      subjectId: subject.id,
-      type: 'mcq_single',
-      prompt: 'In wireless network auditing, an attacker sets up a rogue access point broadcasting the same SSID as a legitimate enterprise network to harvest credentials. What attack is this?',
-      options: [
-        { id: 'opt-a', text: 'Evil Twin Attack' },
-        { id: 'opt-b', text: 'Smurf Attack' },
-        { id: 'opt-c', text: 'Slowloris HTTP Flood' },
-        { id: 'opt-d', text: 'Buffer Overflow' },
-      ],
-      correctAnswer: 'opt-a',
-      explanation: 'An Evil Twin attack impersonates a legitimate wireless access point by copying its SSID and MAC address, enticing client devices to connect and routing their traffic through an attacker-controlled proxy.',
-      difficulty: 3,
-      marks: 2,
-      negativeMarks: 0.5,
-      tags: [finalCode, 'Wireless Security', 'Evil Twin'],
-    },
-    {
-      id: `q-${Date.now()}-6`,
-      subjectId: subject.id,
-      type: 'mcq_single',
-      prompt: 'In AI-assisted threat operations, what vulnerability occurs when untrusted external text overrides system prompts to execute privileged tool actions?',
-      options: [
-        { id: 'opt-a', text: 'Model Inversion' },
-        { id: 'opt-b', text: 'Prompt Injection' },
-        { id: 'opt-c', text: 'Gradient Leakage' },
-        { id: 'opt-d', text: 'Weight Poisoning' },
-      ],
-      correctAnswer: 'opt-b',
-      explanation: 'Prompt injection manipulates the context window of an LLM so that attacker-controlled inputs are interpreted as instructions rather than data.',
-      difficulty: 3,
-      marks: 2,
-      negativeMarks: 0.5,
-      tags: [finalCode, 'AI in Cybersecurity', 'Adversarial AI'],
-    },
-  ];
+  // 7. Generate Comprehensive Practice Questions across ALL Topics for Exam Arena
+  const questions: Question[] = generateCuratedQuestionsForTopics(
+    subject,
+    hierarchy.modules,
+    combinedText
+  );
 
   questions.forEach((q) => storage.saveQuestion(q));
 

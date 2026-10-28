@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Swords,
   Timer,
@@ -13,6 +13,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
+  Plus,
+  Layers,
+  Loader2,
+  X,
+  Filter,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +44,53 @@ export const ExamArenaView: React.FC = () => {
     correctCount: number;
     negativeDeductions: number;
   } | null>(null);
+
+  // Curriculum Scope & Sprint Controls
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string>(subjects[0]?.id || '');
+  const [selectedModuleId, setSelectedModuleId] = useState<string>('all');
+  const [sprintSize, setSprintSize] = useState<number>(5);
+
+  // AI Question Generation Modal State
+  const [showAiModal, setShowAiModal] = useState<boolean>(false);
+  const [selectedTopicForGen, setSelectedTopicForGen] = useState<string>('');
+  const [genCount, setGenCount] = useState<number>(5);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [genFeedback, setGenFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedSubjectId && subjects.length > 0) {
+      setSelectedSubjectId(subjects[0].id);
+    }
+  }, [subjects, selectedSubjectId]);
+
+  const activeSubject = subjects.find((s) => s.id === selectedSubjectId) || subjects[0];
+  const allSubjectTopics = useMemo(() => {
+    return activeSubject?.modules.flatMap((m) => m.chapters.flatMap((c) => c.topics)) || [];
+  }, [activeSubject]);
+
+  useEffect(() => {
+    if (allSubjectTopics.length > 0 && !selectedTopicForGen) {
+      setSelectedTopicForGen(allSubjectTopics[0].id);
+    }
+  }, [allSubjectTopics, selectedTopicForGen]);
+
+  // Compute filtered question pool for active subject & module
+  const filteredPool = useMemo(() => {
+    let pool = [...questions];
+    if (selectedSubjectId) {
+      const subQ = pool.filter((q) => q.subjectId === selectedSubjectId);
+      if (subQ.length > 0) pool = subQ;
+    }
+    if (selectedModuleId !== 'all') {
+      const mod = activeSubject?.modules.find((m) => m.id === selectedModuleId);
+      if (mod) {
+        const modTopicIds = mod.chapters.flatMap((c) => c.topics.map((t) => t.id));
+        const modQ = pool.filter((q) => q.topicId && modTopicIds.includes(q.topicId));
+        if (modQ.length > 0) pool = modQ;
+      }
+    }
+    return pool;
+  }, [questions, selectedSubjectId, selectedModuleId, activeSubject]);
 
   // Restore active test from localStorage if available
   useEffect(() => {
@@ -91,23 +143,31 @@ export const ExamArenaView: React.FC = () => {
 
   const startPractice = (mode: 'topic' | 'mixed' | 'weak' | 'mock') => {
     if (!requireAuth('start retrieval drills and save progress to the database')) return;
-    let pool = [...questions];
+    let pool = [...filteredPool];
     if (pool.length === 0) {
-      alert('No practice questions available yet. Import your syllabus on the Command Center or generate questions in Learning Studio first!');
+      pool = [...questions];
+    }
+    if (pool.length === 0) {
+      alert('No practice questions available yet. Use the "+ Generate AI Questions" button above to synthesize questions from your syllabus!');
       return;
     }
+
     if (mode === 'weak' && weakTopics.length > 0) {
       const weakIds = weakTopics.map((w) => w.topicId);
       const filtered = pool.filter((q) => q.topicId && weakIds.includes(q.topicId));
       if (filtered.length > 0) pool = filtered;
     }
 
+    // Determine count and time
+    const count = mode === 'mock' ? Math.min(20, Math.max(8, pool.length)) : Math.min(sprintSize, pool.length);
+    const durationMinutes = mode === 'mock' ? 45 : Math.max(5, count * 2);
+
     // Shuffle pool
-    const selected = pool.sort(() => Math.random() - 0.5).slice(0, mode === 'mock' ? 8 : 4);
+    const selected = pool.sort(() => Math.random() - 0.5).slice(0, count);
     setTestQuestions(selected);
     setUserAnswers({});
     setCurrentQuestionIdx(0);
-    setTestSecondsLeft(mode === 'mock' ? 45 * 60 : 20 * 60);
+    setTestSecondsLeft(durationMinutes * 60);
     setTestCompleted(false);
     setTestResult(null);
     setIsTestRunning(true);
@@ -120,11 +180,54 @@ export const ExamArenaView: React.FC = () => {
           testQuestions: selected,
           userAnswers: {},
           currentQuestionIdx: 0,
-          testSecondsLeft: mode === 'mock' ? 45 * 60 : 20 * 60,
+          testSecondsLeft: durationMinutes * 60,
         })
       );
     } catch {
       // ignore
+    }
+  };
+
+  const handleGenerateQuestionsWithAI = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!requireAuth('generate practice questions with AI')) return;
+    if (!activeSubject) return;
+
+    const targetTopic = allSubjectTopics.find((t) => t.id === selectedTopicForGen) || allSubjectTopics[0];
+    if (!targetTopic) return;
+
+    setIsGenerating(true);
+    setGenFeedback(null);
+
+    try {
+      const resources = storage.getResources().filter((r) => r.subjectId === activeSubject.id);
+      const docContext = resources.map((r) => r.extractedText).join('\n\n').slice(0, 3000);
+
+      const generated = await aiService.generateQuestions(
+        activeSubject.name,
+        targetTopic.title,
+        genCount,
+        3,
+        docContext
+      );
+
+      generated.forEach((q) => {
+        storage.saveQuestion({
+          ...q,
+          subjectId: activeSubject.id,
+          topicId: targetTopic.id,
+        });
+      });
+
+      setGenFeedback(`✓ Successfully added ${generated.length} fresh practice questions on "${targetTopic.title}" to your question bank!`);
+      setTimeout(() => {
+        setShowAiModal(false);
+        setGenFeedback(null);
+      }, 2000);
+    } catch (err: any) {
+      setGenFeedback(`Failed to generate questions: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -269,15 +372,105 @@ export const ExamArenaView: React.FC = () => {
         !isTestRunning && !testCompleted ? (
           /* Arena Mode Selection Grid */
           <div className="space-y-6">
-            {questions.length === 0 && (
+            {/* Question Pool Control Bar */}
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3 shadow-lg">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400">
+                    <Layers className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold uppercase tracking-wider text-white">
+                      Curriculum Question Bank
+                    </span>
+                    <span className="ml-2 text-xs font-mono font-semibold text-indigo-400">
+                      {filteredPool.length} Questions Ready
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* Sprint Size Selector */}
+                  <div className="flex items-center rounded-xl border border-slate-800 bg-slate-950 p-1 text-[11px] font-semibold">
+                    <span className="px-2 text-slate-400">Sprint:</span>
+                    {[5, 10, 20].map((sz) => (
+                      <button
+                        key={sz}
+                        type="button"
+                        onClick={() => setSprintSize(sz)}
+                        className={`rounded-lg px-2.5 py-1 transition-colors ${
+                          sprintSize === sz
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {sz} Qs
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Generate with AI Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!requireAuth('generate practice questions with AI')) return;
+                      setShowAiModal(true);
+                    }}
+                    className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md shadow-indigo-600/30 hover:opacity-95 transition-opacity"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>+ Generate AI Questions</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Module Scope Filter Pills */}
+              {activeSubject && activeSubject.modules.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-800/80 pt-2.5">
+                  <span className="mr-1 text-[11px] font-medium text-slate-500">Filter Module:</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedModuleId('all')}
+                    className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all ${
+                      selectedModuleId === 'all'
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'border border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                    }`}
+                  >
+                    All Curriculum ({questions.filter((q) => !selectedSubjectId || q.subjectId === selectedSubjectId).length} Qs)
+                  </button>
+                  {activeSubject.modules.map((m, idx) => {
+                    const modTopicIds = m.chapters.flatMap((c) => c.topics.map((t) => t.id));
+                    const modCount = questions.filter((q) => q.topicId && modTopicIds.includes(q.topicId)).length;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setSelectedModuleId(m.id)}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold transition-all ${
+                          selectedModuleId === m.id
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'border border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                        }`}
+                      >
+                        Module {idx + 1}: {m.title.length > 20 ? m.title.slice(0, 18) + '...' : m.title} ({modCount} Qs)
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {filteredPool.length === 0 && (
               <div className="rounded-2xl border border-dashed border-indigo-500/30 bg-indigo-950/20 p-5 text-center">
                 <Swords className="mx-auto h-7 w-7 text-indigo-400" />
-                <h3 className="mt-2 text-sm font-bold text-white">Exam Arena Question Bank is Fresh & Clean</h3>
+                <h3 className="mt-2 text-sm font-bold text-white">No Questions in this Filter</h3>
                 <p className="mt-1 text-xs text-slate-400 max-w-md mx-auto">
-                  Import your course syllabus on the Command Center to automatically extract topics, or generate instant practice questions from any lecture PDF in Learning Studio.
+                  Click "+ Generate AI Questions" above to instantly synthesize examination questions from your course text.
                 </p>
               </div>
             )}
+
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {/* Mode 1: Weak Topics Drill */}
               <div
@@ -295,7 +488,7 @@ export const ExamArenaView: React.FC = () => {
                   Laser focus on questions from topics where your historical accuracy is under 60%.
                 </p>
                 <div className="mt-4 text-[11px] font-semibold text-rose-300">
-                  {weakTopics.length} vulnerable topic{weakTopics.length !== 1 ? 's' : ''} detected →
+                  {weakTopics.length} vulnerable topic{weakTopics.length !== 1 ? 's' : ''} targeted →
                 </div>
               </div>
 
@@ -312,10 +505,10 @@ export const ExamArenaView: React.FC = () => {
                 </div>
                 <h3 className="mt-3 text-base font-bold text-white">Mixed-Topic Blitz</h3>
                 <p className="mt-1 text-xs text-slate-300">
-                  Interleaved retrieval across multiple subjects and difficulty levels to prevent formula lock-in.
+                  Interleaved retrieval across your active curriculum modules to build long-term retention.
                 </p>
                 <div className="mt-4 text-[11px] font-semibold text-indigo-300">
-                  Start 4-question sprint →
+                  Start {Math.min(sprintSize, filteredPool.length || 5)}-question sprint →
                 </div>
               </div>
 
@@ -332,10 +525,10 @@ export const ExamArenaView: React.FC = () => {
                 </div>
                 <h3 className="mt-3 text-base font-bold text-white">Full Mock Examination</h3>
                 <p className="mt-1 text-xs text-slate-300">
-                  Strict 45-minute countdown, negative marking penalties, and comprehensive post-exam score breakdown.
+                  Strict 45-minute countdown, negative marking penalties, and comprehensive score breakdown.
                 </p>
                 <div className="mt-4 text-[11px] font-semibold text-violet-300">
-                  Begin timed simulation →
+                  Begin {Math.min(20, Math.max(8, filteredPool.length))}-question simulation →
                 </div>
               </div>
 
@@ -355,10 +548,111 @@ export const ExamArenaView: React.FC = () => {
                   Directly attempt questions you previously missed until the underlying misconception is cured.
                 </p>
                 <div className="mt-4 text-[11px] font-semibold text-amber-300">
-                  {mistakes.filter((m) => !m.resolved).length} active misconceptions →
+                  {mistakes.filter((m) => !m.resolved).length} active misconception{mistakes.filter((m) => !m.resolved).length !== 1 ? 's' : ''} →
                 </div>
               </div>
             </div>
+
+            {/* Modal: Generate AI Practice Questions */}
+            {showAiModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+                <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl animate-in fade-in zoom-in-95">
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600/20 text-indigo-400">
+                        <Sparkles className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-white">Generate AI Practice Questions</h3>
+                        <p className="text-[11px] text-slate-400">Synthesizes exam-grade questions from your syllabus</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowAiModal(false)}
+                      className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleGenerateQuestionsWithAI} className="mt-4 space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300">Select Topic to Test</label>
+                      <select
+                        value={selectedTopicForGen}
+                        onChange={(e) => setSelectedTopicForGen(e.target.value)}
+                        className="mt-1.5 w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                      >
+                        {allSubjectTopics.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300">Question Quantity</label>
+                      <div className="mt-1.5 flex gap-2">
+                        {[3, 5, 10].map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setGenCount(num)}
+                            className={`flex-1 rounded-xl border py-2 text-xs font-semibold transition-all ${
+                              genCount === num
+                                ? 'border-indigo-500 bg-indigo-600/20 text-indigo-300'
+                                : 'border-slate-800 bg-slate-950 text-slate-400 hover:border-slate-700'
+                            }`}
+                          >
+                            {num} Questions
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {genFeedback && (
+                      <div
+                        className={`rounded-xl border p-3 text-xs ${
+                          genFeedback.startsWith('✓')
+                            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                            : 'border-rose-500/30 bg-rose-500/10 text-rose-300'
+                        }`}
+                      >
+                        {genFeedback}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowAiModal(false)}
+                        className="flex-1 rounded-xl border border-slate-700 bg-slate-800 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-700"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isGenerating}
+                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-indigo-600 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500 disabled:opacity-50"
+                      >
+                        {isGenerating ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Generating...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-3.5 w-3.5" />
+                            <span>Generate Questions</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         ) : isTestRunning ? (
           /* Live Test Engine */

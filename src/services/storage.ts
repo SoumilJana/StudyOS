@@ -37,6 +37,8 @@ import {
   INITIAL_RESOURCES,
 } from './seedData';
 import { toValidUuid } from './cloudSync';
+import { generateCuratedQuestionsForTopics } from './questionBankGenerator';
+import { generateCuratedFlashcardsForTopics } from './flashcardBankGenerator';
 import { supabase } from './supabaseClient';
 
 type Listener = () => void;
@@ -182,9 +184,63 @@ class StudyOSStorage {
       }
 
       this.subjects = this.loadFromStorage('study_os_subjects', []);
+
+      // Sanitize corrupted legacy topic titles in subjects
+      let subjectsUpdated = false;
+      this.subjects.forEach((sub) => {
+        sub.modules?.forEach((mod, mIdx) => {
+          mod.chapters?.forEach((chap) => {
+            chap.topics?.forEach((top, tIdx) => {
+              const origTitle = top.title;
+              let clean = origTitle
+                .replace(/===+\s*DOCUMENT[\s\S]*?===+/gi, '')
+                .replace(/===+/g, '')
+                .replace(/\.pdf\b/gi, '')
+                .replace(/--- Page \d+ ---/g, '')
+                .replace(/^(and|or|in|with|of|to|for|at|the|a|an)\s+/i, '')
+                .replace(/[=~_.,-]+$/g, '')
+                .trim();
+              if (
+                clean.length < 4 ||
+                clean.toLowerCase().includes('pdf') ||
+                clean.toLowerCase().includes('security breaches in')
+              ) {
+                const fallbacks: Record<number, string[]> = {
+                  1: ['Ethical Hacking Fundamentals', 'Threat Modeling & Attack Surfaces', 'Reconnaissance & Footprinting Methodologies'],
+                  2: ['Network Port Scanning & Nmap', 'System Hacking & Password Hashes', 'Privilege Escalation & Domain Security'],
+                  3: ['Web Application Security & SQLi', 'Cross-Site Scripting & CSRF', 'Wireless Network Security (WPA2/3)'],
+                  4: ['Denial of Service & Slowloris', 'Firewall & IDS/IPS Architecture', 'Cryptographic Protocols & Ciphers'],
+                  5: ['AI in Cybersecurity & IDS', 'LLM Prompt Injection Defense', 'Adversarial Machine Learning'],
+                };
+                const modFallback = fallbacks[mIdx + 1] || ['Core Security Protocols', 'System Architecture & Controls'];
+                clean = modFallback[tIdx % modFallback.length];
+              }
+              if (clean !== origTitle) {
+                top.title = clean;
+                subjectsUpdated = true;
+              }
+            });
+          });
+        });
+      });
+      if (subjectsUpdated) {
+        this.saveToStorage('study_os_subjects', this.subjects);
+      }
+
       this.deadlines = this.deduplicateDeadlines(this.loadFromStorage('study_os_deadlines', []));
       this.projects = this.loadFromStorage('study_os_projects', []);
       this.tasks = this.loadFromStorage('study_os_tasks', []);
+
+      // Sanitize orphaned tasks whose parent subject has been removed
+      if (this.subjects.length > 0) {
+        const subjectIds = new Set(this.subjects.map((s) => s.id));
+        const cleanTasks = this.tasks.filter((t) => !t.subjectId || subjectIds.has(t.subjectId));
+        if (cleanTasks.length !== this.tasks.length) {
+          this.tasks = cleanTasks;
+          this.saveToStorage('study_os_tasks', this.tasks);
+        }
+      }
+
       this.decks = this.loadFromStorage('study_os_decks', []);
       this.flashcards = this.loadFromStorage('study_os_flashcards', []);
 
@@ -192,16 +248,65 @@ class StudyOSStorage {
       this.flashcards = this.flashcards.filter((c) => {
         const f = c.front?.toLowerCase() || '';
         const b = c.back?.toLowerCase() || '';
-        if (f.includes('pdf ===') || f.includes('===') || f.includes('of and security breaches') || f.includes('mechanism of and ')) {
+        if (
+          f.includes('pdf ===') ||
+          f.includes('===') ||
+          f.includes('of and security breaches') ||
+          f.includes('mechanism of and ') ||
+          f.includes('what is the core definition and mechanism of and')
+        ) {
           return false;
         }
-        if (b.includes('a fundamental security concept in') && b.includes('understanding this mechanism is essential')) {
+        if (
+          b.includes('a fundamental security concept in') &&
+          b.includes('understanding this mechanism is essential')
+        ) {
           return false;
         }
         return true;
       });
+
+      // Auto-populate / upgrade flashcard deck if user has subjects but flashcards are legacy/depleted
+      if (this.subjects.length > 0 && this.flashcards.length < 15) {
+        for (const sub of this.subjects) {
+          let deck = this.decks.find((d) => d.subjectId === sub.id) || this.decks[0];
+          if (!deck) {
+            deck = {
+              id: `deck-${sub.id}-${Date.now().toString(36)}`,
+              title: `${sub.name} Mastery Deck`,
+              subjectId: sub.id,
+              description: `High-yield active recall flashcards generated across all modules of ${sub.name}.`,
+              color: '#6366f1',
+              cardCount: 20,
+              createdAt: new Date().toISOString(),
+            };
+            this.decks.push(deck);
+            this.saveToStorage('study_os_decks', this.decks);
+          }
+          const newCards = generateCuratedFlashcardsForTopics(sub, deck, sub.modules, '');
+          for (const nc of newCards) {
+            if (!this.flashcards.some((c) => c.front === nc.front)) {
+              this.flashcards.push(nc);
+            }
+          }
+        }
+      }
       this.saveToStorage('study_os_flashcards', this.flashcards);
+
       this.questions = this.loadFromStorage('study_os_questions', []);
+
+      // If user has subjects but question pool is legacy (under 15 questions), auto-expand question bank
+      if (this.subjects.length > 0 && this.questions.length < 15) {
+        for (const sub of this.subjects) {
+          const newQuestions = generateCuratedQuestionsForTopics(sub, sub.modules, '');
+          for (const nq of newQuestions) {
+            if (!this.questions.some((q) => q.prompt === nq.prompt)) {
+              this.questions.push(nq);
+            }
+          }
+        }
+        this.saveToStorage('study_os_questions', this.questions);
+      }
       this.mistakes = this.loadFromStorage('study_os_mistakes', []);
       this.revisions = this.loadFromStorage('study_os_revisions', []);
       this.timeLogs = this.loadFromStorage('study_os_time_logs', []);
@@ -454,7 +559,17 @@ class StudyOSStorage {
       for (const chap of mod.chapters) {
         const topic = chap.topics.find((t) => t.id === topicId);
         if (topic) {
-          Object.assign(topic, updates);
+          if (updates.practiceQuestionsAttempted !== undefined) {
+            topic.practiceQuestionsAttempted = (topic.practiceQuestionsAttempted || 0) + updates.practiceQuestionsAttempted;
+          }
+          if (updates.practiceQuestionsCorrect !== undefined) {
+            topic.practiceQuestionsCorrect = (topic.practiceQuestionsCorrect || 0) + updates.practiceQuestionsCorrect;
+          }
+          Object.assign(topic, {
+            ...updates,
+            practiceQuestionsAttempted: topic.practiceQuestionsAttempted,
+            practiceQuestionsCorrect: topic.practiceQuestionsCorrect,
+          });
           // Recalculate deterministic topic score
           topic.masteryScore = this.calculateTopicMasteryScore(topic);
           topic.masteryState = this.deriveMasteryState(topic);
