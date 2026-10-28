@@ -1,5 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { aiService } from './aiService';
+
+// Mock the network invokeAIProxy so unit tests run deterministically and fast
+vi.mock('./supabaseClient', () => ({
+  invokeAIProxy: vi.fn().mockResolvedValue({
+    data: null,
+    useFallback: true,
+  }),
+  uploadResourceDocument: vi.fn(),
+  supabase: {
+    auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+      onAuthStateChange: vi.fn().mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } }),
+    },
+  },
+}));
 
 describe('AI Service Layer & Backward Planning Engine', () => {
   it('generates a realistic backward study schedule respecting exam dates and buffers', () => {

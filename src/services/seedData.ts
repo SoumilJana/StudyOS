@@ -26,7 +26,7 @@ export const INITIAL_USER_SETTINGS: UserSettings = {
   quietHoursStart: '22:00',
   quietHoursEnd: '07:30',
   enableBrowserNotifications: false,
-  aiProvider: 'heuristic_offline',
+  aiProvider: 'openrouter',
   dashboardWidgets: {
     heroAction: true,
     quickStats: true,

@@ -521,7 +521,7 @@ export interface UserSettings {
   quietHoursEnd: string; // e.g. "07:00"
   enableBrowserNotifications: boolean;
   // AI Config
-  aiProvider: 'gemini' | 'openai' | 'claude' | 'custom' | 'heuristic_offline';
+  aiProvider: 'openrouter' | 'gemini' | 'openai' | 'claude' | 'custom' | 'heuristic_offline';
   apiKey?: string;
   customEndpoint?: string;
   aiModel?: string;

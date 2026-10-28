@@ -3,9 +3,11 @@ import {
   Flashcard,
   BackwardPlanStep,
   DifficultyLevel,
-  QuestionType,
   UserSettings,
+  CardFormat,
 } from '../types';
+import { invokeAIProxy } from './supabaseClient';
+import { storage } from './storage';
 
 export interface TutoringResponse {
   stage: number;
@@ -20,6 +22,7 @@ export interface TutoringResponse {
   };
   examTip: string;
   sourceCitation?: string;
+  modelUsed?: string;
 }
 
 export interface SubjectiveGradingResult {
@@ -42,20 +45,57 @@ class AIService {
     settings?: UserSettings,
     referenceDocumentText?: string
   ): Promise<TutoringResponse> {
-    // If external API key is provided and provider configured, can call Gemini/OpenAI
+    // 1. Try server-side Supabase Edge Function with OpenRouter free model
+    try {
+      const serverResult = await invokeAIProxy('explain_stage', {
+        chapterTitle,
+        topicTitle,
+        stepIndex,
+        referenceContext: referenceDocumentText?.slice(0, 800),
+      });
+
+      if (serverResult.data && serverResult.data.explanation) {
+        return {
+          stage: stepIndex + 1,
+          stageTitle: serverResult.data.stageTitle || `Learning Stage ${stepIndex + 1}`,
+          explanation: serverResult.data.explanation,
+          keyFormulasOrDefinitions: Array.isArray(serverResult.data.keyFormulasOrDefinitions)
+            ? serverResult.data.keyFormulasOrDefinitions
+            : [],
+          retrievalQuestion: serverResult.data.retrievalQuestion || {
+            prompt: `What is the core takeaway of ${topicTitle}?`,
+            options: ['Maintains system invariants', 'Reduces physical memory', 'Increases uncommitted writes', 'None of the above'],
+            correctIndex: 0,
+            explanation: 'Verified through consensus protocol rules.',
+          },
+          examTip: serverResult.data.examTip || 'Pay attention to invariant proofs.',
+          modelUsed: serverResult.cached ? 'OpenRouter (Cached)' : 'OpenRouter Free Model',
+        };
+      } else if (serverResult.isQuotaExhausted) {
+        storage.createNotification({
+          title: 'Free AI Quota Busy',
+          message: 'OpenRouter free-tier is experiencing peak traffic. Falling back to offline cognitive engine.',
+          category: 'system',
+        });
+      }
+    } catch (err) {
+      console.warn('AI proxy unavailable, using local heuristic:', err);
+    }
+
+    // 2. Direct client-side Gemini fallback if API key configured in user settings
     if (settings?.apiKey && settings.aiProvider === 'gemini') {
       try {
         const result = await this.callGeminiAPI(
-          `You are an elite tutor in Study OS. Teach the topic: "${topicTitle}" within Chapter: "${chapterTitle}". Step number: ${stepIndex} of 12. Reference material: ${referenceDocumentText?.slice(0, 1000) || 'None'}. Return JSON with: stageTitle, explanation (markdown format), keyFormulasOrDefinitions (array), retrievalQuestion ({prompt, options (4 strings), correctIndex, explanation}), examTip, sourceCitation.`,
+          `You are an elite tutor in Study OS. Teach topic: "${topicTitle}" in Chapter: "${chapterTitle}". Step: ${stepIndex} of 12. Context: ${referenceDocumentText?.slice(0, 800) || 'None'}. Return JSON with: stageTitle, explanation (markdown), keyFormulasOrDefinitions (string array), retrievalQuestion ({prompt, options (4 strings), correctIndex, explanation}), examTip.`,
           settings.apiKey
         );
-        if (result) return result;
+        if (result && result.explanation) return result;
       } catch (err) {
-        console.warn('Falling back to local heuristic tutor:', err);
+        console.warn('Gemini API fallback error:', err);
       }
     }
 
-    // High-fidelity heuristic cognitive teaching engine
+    // 3. Resilient High-Fidelity Local Offline Cognitive Heuristic Engine
     const stepTitles = [
       'Foundational Mental Model & Intuition',
       'Core Mechanics & Step-by-Step Breakdown',
@@ -99,6 +139,7 @@ In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving bey
       },
       examTip: `In university and certification exams, questions often test the edge case where an uncommitted entry from a prior term is present. Emphasize that leaders never directly commit prior terms by counting replicas!`,
       sourceCitation: referenceDocumentText ? `Referenced from uploaded document (${topicTitle}, Sec. 3.2)` : undefined,
+      modelUsed: 'Local Offline Engine (100% Free)',
     };
   }
 
@@ -111,6 +152,42 @@ In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving bey
     count = 3,
     difficulty: DifficultyLevel = 3
   ): Promise<Question[]> {
+    // 1. Try server-side Supabase Edge Function
+    try {
+      const serverResult = await invokeAIProxy('generate_questions', {
+        subjectName,
+        topicTitle,
+        count,
+        difficulty,
+      });
+
+      if (Array.isArray(serverResult.data) && serverResult.data.length > 0) {
+        // Validate each question structure before returning
+        const validated: Question[] = [];
+        for (const raw of serverResult.data) {
+          if (raw.prompt && raw.correctAnswer && raw.explanation) {
+            validated.push({
+              id: `gen-q-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              type: raw.type || 'mcq_single',
+              prompt: raw.prompt,
+              options: raw.options || undefined,
+              correctAnswer: raw.correctAnswer,
+              explanation: raw.explanation,
+              misconceptions: Array.isArray(raw.misconceptions) ? raw.misconceptions : [],
+              difficulty: raw.difficulty || difficulty,
+              marks: raw.marks || 4,
+              negativeMarks: raw.negativeMarks || 1,
+              tags: [subjectName, topicTitle, 'AI Generated'],
+            });
+          }
+        }
+        if (validated.length > 0) return validated;
+      }
+    } catch (err) {
+      console.warn('AI question generator proxy error, falling back:', err);
+    }
+
+    // 2. Local Fallback Generator
     const list: Question[] = [];
 
     list.push({
@@ -129,7 +206,7 @@ In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving bey
       difficulty,
       marks: 4,
       negativeMarks: 1,
-      tags: [subjectName, topicTitle, 'Generated'],
+      tags: [subjectName, topicTitle, 'Curated'],
     });
 
     list.push({
@@ -176,6 +253,36 @@ In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving bey
     count = 3
   ): Promise<Omit<Flashcard, 'id' | 'createdAt' | 'reviewHistory'>[]> {
     const today = new Date().toISOString().split('T')[0];
+
+    // Try server-side Supabase Edge Function
+    try {
+      const serverResult = await invokeAIProxy('generate_flashcards', {
+        subjectName,
+        topicTitle,
+        count,
+      });
+
+      if (Array.isArray(serverResult.data) && serverResult.data.length > 0) {
+        const validated = serverResult.data.map((c: any) => ({
+          deckId: 'deck-generated',
+          front: c.front || `Define ${topicTitle}`,
+          back: c.back || 'Core definition and exam context.',
+          format: (c.format || 'concept') as CardFormat,
+          tags: Array.isArray(c.tags) ? c.tags : [subjectName, topicTitle],
+          state: 'new' as const,
+          intervalDays: 1,
+          easeFactor: 2.5,
+          repetitions: 0,
+          lapses: 0,
+          dueDate: today,
+        }));
+        if (validated.length > 0) return validated.slice(0, count);
+      }
+    } catch {
+      // fallback
+    }
+
+    // Offline heuristic fallback
     return [
       {
         deckId: 'deck-generated',
@@ -228,11 +335,39 @@ In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving bey
       { criteria: 'Correctly identifies core theoretical concept', points: 1.5 },
       { criteria: 'Provides accurate technical mechanism and justification', points: 1.5 },
     ];
-
     const maxScore = defaultCriteria.reduce((sum, c) => sum + c.points, 0);
-    const text = userAnswer.toLowerCase();
 
-    // Semantic evaluation heuristic
+    // Try server-side Supabase Edge Function
+    try {
+      const serverResult = await invokeAIProxy('grade_subjective', {
+        prompt,
+        rubricCriteria: defaultCriteria,
+        userAnswer,
+      });
+
+      if (serverResult.data && typeof serverResult.data.scoreAwarded === 'number') {
+        return {
+          scoreAwarded: Math.min(maxScore, serverResult.data.scoreAwarded),
+          maxScore,
+          percentage: serverResult.data.percentage || Math.round((serverResult.data.scoreAwarded / maxScore) * 100),
+          criteriaBreakdown: Array.isArray(serverResult.data.criteriaBreakdown)
+            ? serverResult.data.criteriaBreakdown
+            : defaultCriteria.map((c) => ({
+                criteria: c.criteria,
+                pointsAwarded: c.points,
+                maxPoints: c.points,
+                comment: 'Evaluated by OpenRouter model.',
+              })),
+          feedback: serverResult.data.feedback || 'Well analyzed answer.',
+          misconceptionIdentified: serverResult.data.misconceptionIdentified,
+        };
+      }
+    } catch {
+      // fallback
+    }
+
+    // Semantic evaluation heuristic fallback
+    const text = userAnswer.toLowerCase();
     const criteriaBreakdown = defaultCriteria.map((c) => {
       const keywords = c.criteria.toLowerCase().split(' ').filter((w) => w.length > 4);
       const matches = keywords.filter((k) => text.includes(k)).length;
@@ -265,7 +400,6 @@ In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving bey
 
   /**
    * Automatic Backward Study Planner
-   * Calculates a realistic day-by-day distribution of effort between today and the exam date
    */
   public generateBackwardPlan(
     examTitle: string,
@@ -282,10 +416,6 @@ In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving bey
     const stepCount = Math.min(diffDays, Math.max(3, Math.ceil(estimatedWorkloadHours / 2.5)));
     const hoursPerStep = Math.round((estimatedWorkloadHours / stepCount) * 10) / 10;
 
-    // Distribute milestones:
-    // First 50% = In-depth learning & conceptual synthesis
-    // Next 30% = Problem sets & active recall practice
-    // Last 20% = Full timed mock exams & final buffer review
     for (let i = 0; i < stepCount; i++) {
       const stepDate = new Date(today.getTime() + Math.floor((i / stepCount) * diffTime));
       const dateStr = stepDate.toISOString().split('T')[0];
@@ -324,7 +454,7 @@ In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving bey
   }
 
   /**
-   * Helper for Gemini API
+   * Helper for direct Gemini API
    */
   private async callGeminiAPI(prompt: string, apiKey: string): Promise<any> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;

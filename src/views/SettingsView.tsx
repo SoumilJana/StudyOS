@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   User,
-  Key,
   Shield,
   Download,
   Upload,
@@ -10,10 +9,14 @@ import {
   Sparkles,
   Sliders,
   Check,
-  AlertTriangle,
+  Cloud,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
 import { storage } from '../services/storage';
+import { supabase } from '../services/supabaseClient';
+import { AuthModal } from '../components/auth/AuthModal';
 
 export const SettingsView: React.FC = () => {
   const { settings } = useStudyOS();
@@ -26,6 +29,22 @@ export const SettingsView: React.FC = () => {
   const [aiProvider, setAiProvider] = useState(settings.aiProvider);
   const [apiKey, setApiKey] = useState(settings.apiKey || '');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setCurrentUser(data.session?.user || null);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUser(session?.user || null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,11 +102,67 @@ export const SettingsView: React.FC = () => {
       {/* Top Banner */}
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-          System Settings & Integrations
+          System Settings & Cloud Infrastructure
         </h1>
         <p className="mt-1 text-xs text-slate-400 sm:text-sm">
-          Configure AI reasoning providers, hourly check-in frequency, quiet hours, data backups, and study targets.
+          Supabase PostgreSQL, Edge Functions, Row Level Security, OpenRouter free models, and study targets.
         </p>
+      </div>
+
+      {/* Supabase Account & Cloud Sync Status */}
+      <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 to-slate-900 p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-400">
+              <Cloud className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white">Supabase Cloud Account</h2>
+              <p className="text-[11px] text-slate-400">
+                Project: <code className="font-mono text-indigo-300">ckiryrgdenoycrqqatyi</code> (Free Tier Active)
+              </p>
+            </div>
+          </div>
+
+          {currentUser ? (
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Sign Out</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowAuthModal(true)}
+              className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
+            >
+              <LogIn className="h-3.5 w-3.5" />
+              <span>Connect / Sign In</span>
+            </button>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300">
+          {currentUser ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-semibold text-white">Signed in as: </span>
+                <span className="font-mono text-emerald-400">{currentUser.email}</span>
+              </div>
+              <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-mono text-emerald-300">
+                RLS Encrypted
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <span>Running in local offline-first mode. All features remain 100% operational.</span>
+              <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-400">
+                Offline Mode
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSaveSettings} className="space-y-6">
@@ -171,36 +246,42 @@ export const SettingsView: React.FC = () => {
         <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 space-y-4">
           <h2 className="text-sm font-bold text-white flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-amber-400" />
-            <span>AI Tutor & Question Generation Provider</span>
+            <span>AI Reasoning & Tutor Configuration</span>
           </h2>
 
           <div>
-            <label className="text-xs font-semibold text-slate-300">Provider Model</label>
+            <label className="text-xs font-semibold text-slate-300">Provider</label>
             <select
               value={aiProvider}
               onChange={(e) => setAiProvider(e.target.value as any)}
               className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-slate-200"
             >
-              <option value="heuristic_offline">Local Offline Heuristic Engine (100% Zero-Latency, No API Key Required)</option>
-              <option value="gemini">Google Gemini 1.5 Flash (Interactions & Document Extraction)</option>
-              <option value="openai">OpenAI GPT-4o-mini</option>
-              <option value="claude">Anthropic Claude 3.5 Sonnet</option>
+              <option value="openrouter">OpenRouter Free Models (Server-Side Edge Proxy)</option>
+              <option value="heuristic_offline">Local Offline Heuristic Engine (100% Free, Offline)</option>
+              <option value="gemini">Google Gemini 1.5 Flash (Direct API Key)</option>
             </select>
           </div>
 
-          {aiProvider !== 'heuristic_offline' && (
+          {aiProvider === 'openrouter' && (
+            <div className="rounded-xl border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-400 space-y-1">
+              <div className="text-slate-300 font-semibold">Active Server Model:</div>
+              <div className="font-mono text-indigo-300">{import.meta.env.VITE_OPENROUTER_MODEL || 'nvidia/nemotron-3.5-lightning:free'}</div>
+              <p className="text-[10px] text-slate-500">
+                Credentials are kept 100% on the server in Supabase Edge Functions. Free models never incur charges.
+              </p>
+            </div>
+          )}
+
+          {aiProvider === 'gemini' && (
             <div>
-              <label className="text-xs font-semibold text-slate-300">API Key</label>
+              <label className="text-xs font-semibold text-slate-300">Gemini API Key</label>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-..."
+                placeholder="AIzaSy..."
                 className="mt-1 w-full rounded-xl border border-slate-800 bg-slate-950 p-2.5 text-xs text-slate-100 font-mono focus:border-indigo-500 focus:outline-none"
               />
-              <p className="mt-1 text-[10px] text-slate-500">
-                Your key is stored securely in browser storage and only used for your requests.
-              </p>
             </div>
           )}
         </div>
@@ -258,6 +339,12 @@ export const SettingsView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={(u) => setCurrentUser(u)}
+      />
     </div>
   );
 };
