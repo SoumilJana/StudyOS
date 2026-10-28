@@ -13,6 +13,7 @@ import {
   Check,
   ChevronRight,
   TrendingUp,
+  Trash2,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
 import { storage } from '../services/storage';
@@ -135,6 +136,21 @@ export const WorkbenchView: React.FC = () => {
             </button>
           </div>
 
+          {tasks.length > 0 && (
+            <button
+              onClick={() => {
+                if (window.confirm(`Are you sure you want to delete all ${tasks.length} tasks from your Workbench?`)) {
+                  storage.clearAllTasks();
+                }
+              }}
+              className="flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 hover:text-white transition-colors"
+              title="Delete all tasks"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Clear Tasks ({tasks.length})</span>
+            </button>
+          )}
+
           <button
             onClick={() => setShowTaskModal(true)}
             className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-600/30 hover:bg-indigo-500"
@@ -147,7 +163,16 @@ export const WorkbenchView: React.FC = () => {
 
       {activeTab === 'board' ? (
         /* Kanban Board */
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="space-y-4">
+          {tasks.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/40 p-6 text-center">
+              <p className="text-sm font-semibold text-slate-300">Workbench is empty</p>
+              <p className="mt-1 text-xs text-slate-500">
+                You have 0 active tasks. Click "+ New Task" above to add an assignment or task, or import a syllabus to generate your study milestones.
+              </p>
+            </div>
+          )}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {columns.map((col) => {
             const colTasks = tasks.filter((t) => t.status === col.status);
             return (
@@ -175,13 +200,25 @@ export const WorkbenchView: React.FC = () => {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <span className="font-semibold text-slate-200">{t.title}</span>
-                          <button
-                            onClick={() => handleLaunchFocus(t)}
-                            className="opacity-0 group-hover:opacity-100 rounded-lg bg-indigo-600/20 p-1 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all"
-                            title="Launch Pomodoro Focus for this task"
-                          >
-                            <Play className="h-3 w-3 fill-current" />
-                          </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => handleLaunchFocus(t)}
+                              className="opacity-0 group-hover:opacity-100 rounded-lg bg-indigo-600/20 p-1 text-indigo-400 hover:bg-indigo-600 hover:text-white transition-all"
+                              title="Launch Pomodoro Focus for this task"
+                            >
+                              <Play className="h-3 w-3 fill-current" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                storage.deleteTask(t.id);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 rounded-lg bg-rose-500/20 p-1 text-rose-400 hover:bg-rose-500 hover:text-white transition-all"
+                              title="Delete task"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
                         </div>
 
                         {t.description && (
@@ -216,6 +253,7 @@ export const WorkbenchView: React.FC = () => {
               </div>
             );
           })}
+          </div>
         </div>
       ) : (
         /* Projects List View */
@@ -249,7 +287,20 @@ export const WorkbenchView: React.FC = () => {
                     <span className="rounded bg-indigo-500/20 px-2 py-0.5 text-[10px] font-mono text-indigo-300 font-bold uppercase">
                       {p.status.replace('_', ' ')}
                     </span>
-                    <span className="text-xs text-slate-400 font-mono">Target: {p.targetDate}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 font-mono">Target: {p.targetDate}</span>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Delete project "${p.title}"?`)) {
+                            storage.deleteProject(p.id);
+                          }
+                        }}
+                        className="rounded-lg p-1 text-slate-500 hover:bg-rose-500/20 hover:text-rose-400 transition-colors"
+                        title="Delete project"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   <div>

@@ -37,6 +37,7 @@ import {
   INITIAL_RESOURCES,
 } from './seedData';
 import { toValidUuid } from './cloudSync';
+import { supabase } from './supabaseClient';
 
 type Listener = () => void;
 
@@ -657,9 +658,60 @@ class StudyOSStorage {
   }
 
   public deleteTask(id: string): void {
-    this.tasks = this.tasks.filter((t) => t.id !== id);
+    const target = this.tasks.find((t) => t.id === id);
+    const targetUuid = target ? toValidUuid(target.id) : toValidUuid(id);
+    const targetTitle = target?.title.trim().toLowerCase();
+
+    this.tasks = this.tasks.filter((t) => {
+      if (t.id === id) return false;
+      if (toValidUuid(t.id) === targetUuid) return false;
+      if (targetTitle && t.title.trim().toLowerCase() === targetTitle) return false;
+      return true;
+    });
+
     this.saveToStorage('study_os_tasks', this.tasks);
     this.emitMutation('task', id, 'delete', null);
+
+    // Direct cloud delete to guarantee instant purge from Supabase PostgreSQL
+    try {
+      supabase.auth.getSession().then(({ data }) => {
+        const uid = data.session?.user?.id;
+        if (uid) {
+          supabase
+            .from('tasks')
+            .delete()
+            .or(`id.eq.${targetUuid},title.eq.${target?.title || ''}`)
+            .eq('user_id', uid)
+            .then();
+        }
+      });
+    } catch {
+      // Ignore background cloud delete errors
+    }
+
+    this.notify();
+  }
+
+  public clearAllTasks(): void {
+    const old = [...this.tasks];
+    this.tasks = [];
+    this.saveToStorage('study_os_tasks', []);
+    old.forEach((t) => this.emitMutation('task', t.id, 'delete', null));
+
+    // Direct cloud delete of all tasks for this authenticated user
+    try {
+      supabase.auth.getSession().then(({ data }) => {
+        const uid = data.session?.user?.id;
+        if (uid) {
+          supabase.from('tasks').delete().eq('user_id', uid).then(() => {
+            console.log('[Storage] Cleared all user tasks from Supabase cloud');
+          });
+        }
+      });
+    } catch {
+      // Ignore background cloud delete errors
+    }
+
     this.notify();
   }
 
@@ -1109,6 +1161,7 @@ class StudyOSStorage {
 
   public resetToDefault(): void {
     if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('study_os_sync_queue');
       localStorage.clear();
       localStorage.setItem('study_os_version', 'v3_fresh_clean_user');
     }

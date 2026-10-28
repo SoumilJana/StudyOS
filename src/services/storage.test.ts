@@ -265,4 +265,58 @@ describe('Study OS Core Storage & Calculation Engines', () => {
       expect(storage.getDeadlines().some((d) => d.id === 'dl-test-del')).toBe(false);
     });
   });
+
+  describe('Workbench Task Deletion & Purging', () => {
+    it('deletes individual task by id or converted uuid', () => {
+      storage.saveTask({
+        id: 'task-test-1',
+        title: 'Review Buffer Overflow lab',
+        status: 'todo',
+        priority: 'high',
+        estimatedMinutes: 45,
+        actualMinutes: 0,
+        category: 'academic',
+        dependencies: [],
+        subtasks: [],
+        createdAt: new Date().toISOString(),
+      });
+
+      expect(storage.getTasks().some((t) => t.id === 'task-test-1')).toBe(true);
+
+      storage.deleteTask('task-test-1');
+      expect(storage.getTasks().some((t) => t.id === 'task-test-1')).toBe(false);
+    });
+
+    it('clears all tasks completely on clearAllTasks', () => {
+      storage.saveTask({
+        id: 'task-batch-1',
+        title: 'Task 1',
+        status: 'todo',
+        priority: 'medium',
+        estimatedMinutes: 30,
+        actualMinutes: 0,
+        category: 'academic',
+        dependencies: [],
+        subtasks: [],
+        createdAt: new Date().toISOString(),
+      });
+      storage.saveTask({
+        id: 'task-batch-2',
+        title: 'Task 2',
+        status: 'in_progress',
+        priority: 'urgent',
+        estimatedMinutes: 60,
+        actualMinutes: 0,
+        category: 'academic',
+        dependencies: [],
+        subtasks: [],
+        createdAt: new Date().toISOString(),
+      });
+
+      expect(storage.getTasks().length).toBeGreaterThanOrEqual(2);
+
+      storage.clearAllTasks();
+      expect(storage.getTasks().length).toBe(0);
+    });
+  });
 });

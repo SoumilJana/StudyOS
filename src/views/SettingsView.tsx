@@ -59,6 +59,7 @@ export const SettingsView: React.FC = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   const handleTestAIConnection = async () => {
     setTestState({ running: true, result: undefined });
@@ -161,8 +162,50 @@ export const SettingsView: React.FC = () => {
     reader.readAsText(file);
   };
 
-  const handleReset = () => {
-    if (confirm('Are you sure you want to clear all data and start with a completely clean slate?')) {
+  const handleReset = async () => {
+    if (
+      !confirm(
+        'Are you sure you want to clear all data and start with a completely clean slate?\n\nThis will permanently delete all subjects, modules, exam schedules, flashcards, questions, and workbench tasks across both your local device and Supabase cloud.'
+      )
+    ) {
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const uid = sessionData?.session?.user?.id || currentUser?.id;
+      if (uid) {
+        const tables = [
+          'time_logs',
+          'focus_sessions',
+          'hourly_checkins',
+          'mistake_records',
+          'revision_events',
+          'tasks',
+          'flashcards',
+          'flashcard_decks',
+          'questions',
+          'deadlines',
+          'projects',
+          'resources',
+          'topics',
+          'chapters',
+          'modules',
+          'exams',
+          'subjects',
+        ];
+        for (const tbl of tables) {
+          try {
+            await supabase.from(tbl).delete().eq('user_id', uid);
+          } catch (e) {
+            console.warn(`Failed to clean remote table ${tbl}:`, e);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Cloud purge during factory reset encountered an issue:', err);
+    } finally {
       storage.resetToDefault();
       window.location.reload();
     }
@@ -821,10 +864,20 @@ export const SettingsView: React.FC = () => {
           <button
             type="button"
             onClick={handleReset}
-            className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 ml-auto"
+            disabled={isResetting}
+            className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 disabled:opacity-50 ml-auto"
           >
-            <RotateCcw className="h-4 w-4" />
-            <span>Wipe All Data (Fresh Clean Slate)</span>
+            {isResetting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Wiping Local & Cloud Data...</span>
+              </>
+            ) : (
+              <>
+                <RotateCcw className="h-4 w-4" />
+                <span>Wipe All Data (Fresh Clean Slate)</span>
+              </>
+            )}
           </button>
         </div>
       </div>
