@@ -4,7 +4,7 @@ A unified, game-inspired operating system for personal learning, exam preparatio
 
 Built with **React 19, TypeScript, Tailwind CSS v4, Vite 8, and Supabase (PostgreSQL, Storage, Auth, Edge Functions)**.
 
-[![Tests](https://img.shields.io/badge/tests-17%20passed-success)](https://github.com/SoumilJana/StudyOS)
+[![Tests](https://img.shields.io/badge/tests-25%20passed-success)](https://github.com/SoumilJana/StudyOS)
 [![Supabase](https://img.shields.io/badge/Supabase-Free%20Tier%20Ready-3ECF8E?logo=supabase)](https://supabase.com)
 [![OpenRouter](https://img.shields.io/badge/OpenRouter-Free%20AI%20Models-6366F1)](https://openrouter.ai)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript)](https://www.typescriptlang.org)
@@ -72,15 +72,15 @@ npm install
 ```
 
 ### 2. Configure Environment
-Copy `.env.example` to `.env`:
+Copy `.env.example` to `.env` and fill in your Supabase credentials:
 ```bash
 cp .env.example .env
 ```
-Default `.env` settings:
+Environment variables:
 ```env
-VITE_SUPABASE_URL=https://ckiryrgdenoycrqqatyi.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-VITE_OPENROUTER_MODEL=nvidia/nemotron-3.5-lightning:free
+VITE_SUPABASE_URL=https://<your-project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<your-supabase-anon-key>
+VITE_OPENROUTER_MODEL=google/gemma-4-31b-it:free
 VITE_AI_PROVIDER=openrouter
 ```
 
@@ -93,7 +93,7 @@ npm run dev
 ```bash
 npm test
 ```
-Runs 17 unit and integration tests covering SM-2 interval calculations, topic mastery progression, time log deduplication, deterministic UUID mapping, and AI proxy mocks.
+Runs 25 unit and integration tests covering SM-2 interval calculations, topic mastery progression, time log deduplication, deterministic UUID mapping, outbox queue coalescing, and cloud sync adapters.
 
 ### 5. Build for Production
 ```bash
@@ -108,6 +108,7 @@ npm run build
 Migrations are managed in `supabase/migrations/`:
 - `20261028000000_study_os_schema.sql`: 20 tables, indexes, triggers, and RLS policies.
 - `20261028000001_storage_setup.sql`: Storage bucket configuration and private upload security.
+- `20261028000002_realtime_setup.sql`: REPLICA IDENTITY FULL and Realtime publication configuration.
 
 To push migrations to remote Supabase:
 ```bash
@@ -120,9 +121,10 @@ npx supabase functions deploy ai-proxy --no-verify-jwt
 ```
 
 ### Managing Server Secrets
+Server-side secrets are stored exclusively on Supabase Edge infrastructure (never exposed to browser bundles):
 ```bash
-npx supabase secrets set OPENROUTER_API_KEY="sk-or-v1-..."
-npx supabase secrets set OPENROUTER_MODEL="nvidia/nemotron-3.5-lightning:free"
+npx supabase secrets set OPENROUTER_API_KEY="your-openrouter-api-key"
+npx supabase secrets set OPENROUTER_MODEL="google/gemma-4-31b-it:free"
 ```
 
 ---

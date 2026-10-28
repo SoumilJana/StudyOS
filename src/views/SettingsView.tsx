@@ -169,7 +169,7 @@ export const SettingsView: React.FC = () => {
             <div>
               <h2 className="text-sm font-bold text-white">Supabase Cloud Account</h2>
               <p className="text-[11px] text-slate-400">
-                Project: <code className="font-mono text-indigo-300">ckiryrgdenoycrqqatyi</code> (Free Tier Active)
+                Project: <code className="font-mono text-indigo-300">{(import.meta.env.VITE_SUPABASE_URL || '').replace('https://', '').split('.')[0] || 'Cloud Database'}</code> (Free Tier Active)
               </p>
             </div>
           </div>
