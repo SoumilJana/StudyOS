@@ -12,11 +12,15 @@ import {
   Cloud,
   LogOut,
   LogIn,
+  RefreshCw,
+  UploadCloud,
+  DownloadCloud,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
 import { storage } from '../services/storage';
 import { supabase } from '../services/supabaseClient';
 import { AuthModal } from '../components/auth/AuthModal';
+import { cloudSync } from '../services/cloudSync';
 
 export const SettingsView: React.FC = () => {
   const { settings } = useStudyOS();
@@ -31,6 +35,27 @@ export const SettingsView: React.FC = () => {
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState<string | null>(null);
+
+  const handleSyncToCloud = async () => {
+    if (!currentUser?.id) return;
+    setSyncing(true);
+    setSyncStatusMsg('Pushing local data to Supabase PostgreSQL...');
+    const res = await cloudSync.syncToCloud(currentUser.id);
+    setSyncing(false);
+    setSyncStatusMsg(res.message);
+  };
+
+  const handleRestoreFromCloud = async () => {
+    if (!currentUser?.id) return;
+    if (!confirm('This will load your saved cloud data into local storage. Continue?')) return;
+    setSyncing(true);
+    setSyncStatusMsg('Pulling cloud data from Supabase...');
+    const res = await cloudSync.restoreFromCloud(currentUser.id);
+    setSyncing(false);
+    setSyncStatusMsg(res.message);
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -145,14 +170,45 @@ export const SettingsView: React.FC = () => {
 
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-300">
           {currentUser ? (
-            <div className="flex items-center justify-between">
-              <div>
-                <span className="font-semibold text-white">Signed in as: </span>
-                <span className="font-mono text-emerald-400">{currentUser.email}</span>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="font-semibold text-white">Signed in as: </span>
+                  <span className="font-mono text-emerald-400">{currentUser.email}</span>
+                </div>
+                <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-mono text-emerald-300">
+                  RLS Encrypted
+                </span>
               </div>
-              <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-mono text-emerald-300">
-                RLS Encrypted
-              </span>
+
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80">
+                <button
+                  type="button"
+                  disabled={syncing}
+                  onClick={handleSyncToCloud}
+                  className="flex items-center gap-1.5 rounded-lg bg-indigo-600/90 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
+                >
+                  <UploadCloud className={`h-3.5 w-3.5 ${syncing ? 'animate-bounce' : ''}`} />
+                  <span>{syncing ? 'Syncing...' : 'Sync Local to Cloud'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={syncing}
+                  onClick={handleRestoreFromCloud}
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-50"
+                >
+                  <DownloadCloud className="h-3.5 w-3.5 text-slate-400" />
+                  <span>Restore from Cloud</span>
+                </button>
+
+                {syncStatusMsg && (
+                  <span className="text-[11px] text-slate-400 ml-auto flex items-center gap-1">
+                    <RefreshCw className={`h-3 w-3 text-indigo-400 ${syncing ? 'animate-spin' : ''}`} />
+                    {syncStatusMsg}
+                  </span>
+                )}
+              </div>
             </div>
           ) : (
             <div className="flex items-center justify-between">
