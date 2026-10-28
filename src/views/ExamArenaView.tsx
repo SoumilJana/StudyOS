@@ -18,6 +18,7 @@ import { useStudyOS } from '../context/StudyOSContext';
 import { storage } from '../services/storage';
 import { aiService } from '../services/aiService';
 import { Question, MistakeRecord } from '../types';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
 
 export const ExamArenaView: React.FC = () => {
   const { questions, mistakes, subjects, weakTopics } = useStudyOS();
@@ -566,8 +567,8 @@ export const ExamArenaView: React.FC = () => {
                       <span>{String(q.correctAnswer)}</span>
                     </div>
                     <div className="mt-2 text-slate-400">
-                      <span className="font-bold">Explanation: </span>
-                      <span>{q.explanation}</span>
+                      <span className="font-bold text-slate-300">Explanation: </span>
+                      <MarkdownRenderer content={q.explanation} className="mt-1" />
                     </div>
                   </div>
                 );

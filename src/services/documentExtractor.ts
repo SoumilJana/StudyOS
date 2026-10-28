@@ -1,3 +1,20 @@
+// Polyfill Uint8Array.prototype.toHex and Math.sumPrecise for pdfjs-dist compatibility
+if (typeof Uint8Array !== 'undefined' && !(Uint8Array.prototype as any).toHex) {
+  (Uint8Array.prototype as any).toHex = function () {
+    return Array.from(this as Uint8Array)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  };
+}
+
+if (typeof Math !== 'undefined' && !(Math as any).sumPrecise) {
+  (Math as any).sumPrecise = function (items: Iterable<number>) {
+    let sum = 0;
+    for (const n of items) sum += n;
+    return sum;
+  };
+}
+
 import * as pdfjsLib from 'pdfjs-dist';
 import { ResourceType, ExtractedSection } from '../types';
 

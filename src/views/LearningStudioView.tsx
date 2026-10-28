@@ -21,6 +21,7 @@ import { useStudyOS } from '../context/StudyOSContext';
 import { aiService, TutoringResponse } from '../services/aiService';
 import { storage } from '../services/storage';
 import { parseUploadedDocument } from '../services/documentExtractor';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
 
 export const LearningStudioView: React.FC = () => {
   const { subjects, settings, resources } = useStudyOS();
@@ -480,11 +481,7 @@ export const LearningStudioView: React.FC = () => {
             <div className="space-y-6">
               {/* Markdown Content Area */}
               <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-6 leading-relaxed">
-                <div className="prose prose-invert max-w-none text-xs sm:text-sm text-slate-300 space-y-4">
-                  {tutoringData.explanation.split('\n\n').map((paragraph, i) => (
-                    <p key={i}>{paragraph}</p>
-                  ))}
-                </div>
+                <MarkdownRenderer content={tutoringData.explanation} />
 
                 {/* Key Formulas / Definitions Box */}
                 {tutoringData.keyFormulasOrDefinitions.length > 0 && (
@@ -494,8 +491,8 @@ export const LearningStudioView: React.FC = () => {
                     </span>
                     <ul className="mt-2 space-y-1.5 text-xs text-indigo-200 font-mono">
                       {tutoringData.keyFormulasOrDefinitions.map((f, idx) => (
-                        <li key={idx} className="flex items-center gap-2">
-                          <span className="text-indigo-400">•</span>
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="text-indigo-400 mt-0.5">•</span>
                           <span>{f}</span>
                         </li>
                       ))}
@@ -509,7 +506,7 @@ export const LearningStudioView: React.FC = () => {
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
                     <div>
                       <span className="font-bold">High-Yield Exam Pointer: </span>
-                      <span>{tutoringData.examTip}</span>
+                      <MarkdownRenderer content={tutoringData.examTip} className="inline" />
                     </div>
                   </div>
                 )}

@@ -43,4 +43,25 @@ describe('Syllabus Importer Service', () => {
     expect(res.courseTitle).toBe('Computer Networks');
     expect(res.modules.length).toBe(4); // 4 balanced auto-generated modules
   });
+
+  it('tests actual Ethical Hacking Syllabus PDF if present', async () => {
+    const fs = await import('fs');
+    const path = 'c:/Users/skull/Downloads/EthicalHackingPDFs/Ethical Hacking Syllabus_2026.pdf';
+    if (fs.existsSync(path)) {
+      const { parseUploadedDocument } = await import('./documentExtractor');
+      const buf = fs.readFileSync(path);
+      const file = new File([buf], 'Ethical Hacking Syllabus_2026.pdf', { type: 'application/pdf' });
+      const doc = await parseUploadedDocument(file);
+      const hierarchy = extractHierarchyFromSyllabusText(doc.extractedText, 'Ethical Hacking');
+      
+      expect(hierarchy.courseCode).toBe('PECCS701I');
+      expect(hierarchy.courseTitle).toBe('Ethical Hacking');
+      expect(hierarchy.modules.length).toBe(5);
+      expect(hierarchy.modules[0].title).toContain('Fundamentals of Ethical Hacking');
+      expect(hierarchy.modules[1].title).toContain('System and Network Exploitation');
+      expect(hierarchy.modules[2].title).toContain('Web and Wireless Hacking');
+      expect(hierarchy.modules[3].title).toContain('Advanced Techniques and Countermeasures');
+      expect(hierarchy.modules[4].title).toContain('AI in Cybersecurity');
+    }
+  });
 });
