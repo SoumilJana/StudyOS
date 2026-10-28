@@ -337,8 +337,14 @@ export async function setupCourseFromSyllabus(
   const finalTitle = customSubjectName?.trim() || hierarchy.courseTitle;
   const finalCode = customSubjectCode?.trim() || hierarchy.courseCode;
 
-  // 3. Create Subject
-  const subjectId = `sub-${Date.now()}`;
+  // 3. Create or Update Subject
+  const existingSubjects = storage.getSubjects();
+  const existingSubject = existingSubjects.find(
+    (s) =>
+      s.code.toLowerCase() === finalCode.toLowerCase() ||
+      s.name.toLowerCase() === finalTitle.toLowerCase()
+  );
+  const subjectId = existingSubject ? existingSubject.id : `sub-${Date.now()}`;
   const subjectModules = hierarchy.modules.map((m) => ({
     ...m,
     subjectId,
@@ -353,7 +359,7 @@ export async function setupCourseFromSyllabus(
     description: `Curriculum and exam roadmap generated from ${file.name}.`,
     exams: [
       {
-        id: `exam-${Date.now()}`,
+        id: existingSubject?.exams?.[0]?.id || `exam-${Date.now()}`,
         subjectId,
         name: `${finalTitle} Examination`,
         date: examDateStr,
@@ -363,7 +369,7 @@ export async function setupCourseFromSyllabus(
       },
     ],
     modules: subjectModules,
-    createdAt: new Date().toISOString(),
+    createdAt: existingSubject?.createdAt || new Date().toISOString(),
   };
   storage.saveSubject(subject);
 
@@ -384,7 +390,7 @@ export async function setupCourseFromSyllabus(
   };
   storage.saveResource(resource);
 
-  // 5. Generate Exam Deadline & Backward Study Plan
+  // 5. Generate Exam Deadline & Backward Study Plan (Deduplicated)
   const allTopics = hierarchy.modules.flatMap((m) => m.chapters.flatMap((c) => c.topics));
   const allTopicIds = allTopics.map((t) => t.id);
 
@@ -395,7 +401,13 @@ export async function setupCourseFromSyllabus(
     allTopicIds
   );
 
-  const deadlineId = `dl-${Date.now()}`;
+  const existingDeadlines = storage.getDeadlines();
+  const existingDl = existingDeadlines.find(
+    (d) =>
+      d.title.toLowerCase() === `${finalTitle} Examination`.toLowerCase() ||
+      d.linkedSubjectId === subject.id
+  );
+  const deadlineId = existingDl ? existingDl.id : `dl-${Date.now()}`;
   const deadline: Deadline = {
     id: deadlineId,
     title: `${finalTitle} Examination`,
@@ -408,12 +420,18 @@ export async function setupCourseFromSyllabus(
     linkedSubjectId: subject.id,
     backwardPlan,
     notes: `Comprehensive examination roadmap backward-planned from ${examDateStr}.`,
-    createdAt: new Date().toISOString(),
+    createdAt: existingDl?.createdAt || new Date().toISOString(),
   };
   storage.saveDeadline(deadline);
 
   // 6. Generate Flashcard Deck & High-Yield Cards across ALL modules
-  const deckId = `deck-${Date.now()}`;
+  const existingDecks = storage.getDecks();
+  const existingDeck = existingDecks.find(
+    (dk) =>
+      dk.title.toLowerCase() === `${finalTitle} Mastery Deck`.toLowerCase() ||
+      dk.subjectId === subject.id
+  );
+  const deckId = existingDeck ? existingDeck.id : `deck-${Date.now()}`;
   const deck: FlashcardDeck = {
     id: deckId,
     title: `${finalTitle} Mastery Deck`,
@@ -421,7 +439,7 @@ export async function setupCourseFromSyllabus(
     description: `High-yield active recall flashcards generated across all modules of ${finalTitle}.`,
     color: '#6366f1',
     cardCount: allTopics.length,
-    createdAt: new Date().toISOString(),
+    createdAt: existingDeck?.createdAt || new Date().toISOString(),
   };
   storage.saveDeck(deck);
 

@@ -209,4 +209,60 @@ describe('Study OS Core Storage & Calculation Engines', () => {
       expect(updated?.scheduledDate).toBe('2026-10-30');
     });
   });
+
+  describe('Deadline Deduplication & Management', () => {
+    it('deduplicates identical deadlines by title and category', () => {
+      storage.saveDeadline({
+        id: 'dl-client-1',
+        title: 'Ethical Hacking Examination',
+        description: 'Test description',
+        category: 'exam',
+        dueDate: '2026-11-06T00:00:00.000Z',
+        priority: 'urgent',
+        estimatedWorkloadHours: 30,
+        status: 'in_progress',
+        backwardPlan: [],
+        createdAt: new Date().toISOString(),
+      });
+
+      expect(storage.getDeadlines().length).toBe(1);
+
+      // Save a duplicate with a converted UUID from remote sync
+      storage.saveDeadline({
+        id: '00000000-0000-4000-8000-000000000001',
+        title: 'Ethical Hacking Examination',
+        description: 'Test description',
+        category: 'exam',
+        dueDate: '2026-11-06T00:00:00.000Z',
+        priority: 'urgent',
+        estimatedWorkloadHours: 30,
+        status: 'in_progress',
+        backwardPlan: [],
+        createdAt: new Date().toISOString(),
+      });
+
+      // Must remain 1 due to deduplication
+      expect(storage.getDeadlines().length).toBe(1);
+    });
+
+    it('deletes deadline cleanly without leaving phantom duplicates', () => {
+      storage.saveDeadline({
+        id: 'dl-test-del',
+        title: 'Penetration Testing Certification',
+        description: 'Test description',
+        category: 'exam',
+        dueDate: '2026-11-15T00:00:00.000Z',
+        priority: 'high',
+        estimatedWorkloadHours: 25,
+        status: 'in_progress',
+        backwardPlan: [],
+        createdAt: new Date().toISOString(),
+      });
+
+      expect(storage.getDeadlines().some((d) => d.id === 'dl-test-del')).toBe(true);
+
+      storage.deleteDeadline('dl-test-del');
+      expect(storage.getDeadlines().some((d) => d.id === 'dl-test-del')).toBe(false);
+    });
+  });
 });

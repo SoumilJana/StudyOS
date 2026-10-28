@@ -23,7 +23,23 @@ export class SupabaseSyncAdapter implements CloudSyncAdapter {
     const appliedMutationIds: string[] = [];
     const failedMutations: { id: string; error: string }[] = [];
 
-    for (const m of mutations) {
+    // Ensure dependencies (decks, projects) are synced before children (flashcards, tasks)
+    const entityOrder: Record<string, number> = {
+      settings: 1,
+      gamification: 2,
+      deck: 3,
+      project: 4,
+      deadline: 5,
+      flashcard: 6,
+      task: 7,
+      focusSession: 8,
+      timeLog: 9,
+    };
+    const sorted = [...mutations].sort(
+      (a, b) => (entityOrder[a.entityType] || 50) - (entityOrder[b.entityType] || 50)
+    );
+
+    for (const m of sorted) {
       try {
         if (m.operation === 'delete') {
           await this.handleDelete(m, userId);
@@ -110,16 +126,23 @@ export class SupabaseSyncAdapter implements CloudSyncAdapter {
       }
 
       case 'deadline': {
+        let validDueDate: string;
+        try {
+          validDueDate = new Date(p.dueDate).toISOString();
+        } catch {
+          validDueDate = new Date().toISOString();
+        }
+
         const { error } = await supabase.from('deadlines').upsert({
           id: toValidUuid(p.id),
           user_id: userId,
           title: p.title,
           description: p.description || '',
-          category: p.category,
-          due_date: p.dueDate,
-          priority: p.priority,
-          estimated_workload_hours: p.estimatedWorkloadHours,
-          status: p.status,
+          category: p.category || 'exam',
+          due_date: validDueDate,
+          priority: p.priority || 'high',
+          estimated_workload_hours: p.estimatedWorkloadHours || 20,
+          status: p.status || 'in_progress',
           backward_plan: p.backwardPlan || [],
           completed_at: p.completedAt || null,
         });
@@ -133,11 +156,11 @@ export class SupabaseSyncAdapter implements CloudSyncAdapter {
           user_id: userId,
           title: p.title,
           description: p.description || '',
-          status: p.status,
-          priority: p.priority,
-          start_date: p.startDate,
+          status: p.status || 'in_progress',
+          priority: p.priority || 'medium',
+          start_date: p.startDate || new Date().toISOString().split('T')[0],
           target_date: p.targetDate || null,
-          estimated_hours: p.estimatedHours,
+          estimated_hours: p.estimatedHours || 25,
           actual_hours_tracked: p.actualHoursTracked || 0,
           milestones: p.milestones || [],
           tags: p.tags || [],
@@ -147,22 +170,35 @@ export class SupabaseSyncAdapter implements CloudSyncAdapter {
       }
 
       case 'task': {
-        const { error } = await supabase.from('tasks').upsert({
+        const payload: Record<string, any> = {
           id: toValidUuid(p.id),
           user_id: userId,
           title: p.title,
           description: p.description || '',
-          status: p.status,
-          priority: p.priority,
-          due_date: p.dueDate || null,
-          estimated_minutes: p.estimatedMinutes,
+          status: p.status || 'todo',
+          priority: p.priority || 'medium',
+          due_date: p.dueDate ? new Date(p.dueDate).toISOString().split('T')[0] : null,
+          estimated_minutes: p.estimatedMinutes || 60,
           actual_minutes: p.actualMinutes || 0,
-          category: p.category,
-          project_id: p.projectId ? toValidUuid(p.projectId) : null,
+          category: p.category || 'academic',
           dependencies: p.dependencies || [],
           subtasks: p.subtasks || [],
           completed_at: p.completedAt || null,
-        });
+        };
+
+        if (p.projectId) {
+          const projectUuid = toValidUuid(p.projectId);
+          const { data: proj } = await supabase
+            .from('projects')
+            .select('id')
+            .eq('id', projectUuid)
+            .maybeSingle();
+          if (proj) {
+            payload.project_id = projectUuid;
+          }
+        }
+
+        const { error } = await supabase.from('tasks').upsert(payload);
         if (error) throw error;
         break;
       }
@@ -180,10 +216,26 @@ export class SupabaseSyncAdapter implements CloudSyncAdapter {
       }
 
       case 'flashcard': {
+        const deckUuid = toValidUuid(p.deckId);
+        const { data: deckExists } = await supabase
+          .from('flashcard_decks')
+          .select('id')
+          .eq('id', deckUuid)
+          .maybeSingle();
+
+        if (!deckExists) {
+          await supabase.from('flashcard_decks').upsert({
+            id: deckUuid,
+            user_id: userId,
+            title: 'Mastery Deck',
+            color: '#6366f1',
+          });
+        }
+
         const { error } = await supabase.from('flashcards').upsert({
           id: toValidUuid(p.id),
           user_id: userId,
-          deck_id: toValidUuid(p.deckId),
+          deck_id: deckUuid,
           front: p.front,
           back: p.back,
           format: p.format || 'concept',

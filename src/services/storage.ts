@@ -36,6 +36,7 @@ import {
   INITIAL_NOTIFICATIONS,
   INITIAL_RESOURCES,
 } from './seedData';
+import { toValidUuid } from './cloudSync';
 
 type Listener = () => void;
 
@@ -180,7 +181,7 @@ class StudyOSStorage {
       }
 
       this.subjects = this.loadFromStorage('study_os_subjects', []);
-      this.deadlines = this.loadFromStorage('study_os_deadlines', []);
+      this.deadlines = this.deduplicateDeadlines(this.loadFromStorage('study_os_deadlines', []));
       this.projects = this.loadFromStorage('study_os_projects', []);
       this.tasks = this.loadFromStorage('study_os_tasks', []);
       this.decks = this.loadFromStorage('study_os_decks', []);
@@ -498,26 +499,73 @@ class StudyOSStorage {
   // ==========================================
   // Deadlines & Backward Planner
   // ==========================================
+  // Deadlines & Backward Planner
+  // ==========================================
+  private deduplicateDeadlines(deadlines: Deadline[]): Deadline[] {
+    const seen = new Set<string>();
+    const result: Deadline[] = [];
+    for (const d of deadlines) {
+      const key = `${d.title.trim().toLowerCase()}_${d.category}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        result.push(d);
+      }
+    }
+    return result;
+  }
+
   public getDeadlines(): Deadline[] {
     return [...this.deadlines];
   }
 
   public saveDeadline(deadline: Deadline): void {
-    const index = this.deadlines.findIndex((d) => d.id === deadline.id);
+    const targetUuid = toValidUuid(deadline.id);
+    const index = this.deadlines.findIndex(
+      (d) =>
+        d.id === deadline.id ||
+        toValidUuid(d.id) === targetUuid ||
+        (d.title.trim().toLowerCase() === deadline.title.trim().toLowerCase() &&
+          d.category === deadline.category)
+    );
     const op = index >= 0 ? 'update' : 'create';
     if (index >= 0) {
-      this.deadlines[index] = deadline;
+      const existing = this.deadlines[index];
+      const mergedPlan =
+        deadline.backwardPlan?.map((step, idx) => {
+          const existingStep = existing.backwardPlan?.[idx];
+          return {
+            ...step,
+            completed: existingStep?.completed ?? step.completed ?? false,
+          };
+        }) || existing.backwardPlan;
+
+      this.deadlines[index] = {
+        ...existing,
+        ...deadline,
+        id: existing.id,
+        backwardPlan: mergedPlan,
+      };
     } else {
       this.deadlines.push(deadline);
       this.addXP(25, 'Created planned deadline');
     }
+    this.deadlines = this.deduplicateDeadlines(this.deadlines);
     this.saveToStorage('study_os_deadlines', this.deadlines);
     this.emitMutation('deadline', deadline.id, op, deadline);
     this.notify();
   }
 
   public deleteDeadline(id: string): void {
-    this.deadlines = this.deadlines.filter((d) => d.id !== id);
+    const target = this.deadlines.find((d) => d.id === id);
+    const targetUuid = target ? toValidUuid(target.id) : toValidUuid(id);
+    const targetTitle = target?.title.trim().toLowerCase();
+
+    this.deadlines = this.deadlines.filter((d) => {
+      if (d.id === id) return false;
+      if (toValidUuid(d.id) === targetUuid) return false;
+      if (targetTitle && d.title.trim().toLowerCase() === targetTitle) return false;
+      return true;
+    });
     this.saveToStorage('study_os_deadlines', this.deadlines);
     this.emitMutation('deadline', id, 'delete', null);
     this.notify();
@@ -542,10 +590,16 @@ class StudyOSStorage {
   }
 
   public saveProject(project: Project): void {
-    const index = this.projects.findIndex((p) => p.id === project.id);
+    const targetUuid = toValidUuid(project.id);
+    const index = this.projects.findIndex(
+      (p) =>
+        p.id === project.id ||
+        toValidUuid(p.id) === targetUuid ||
+        p.title.trim().toLowerCase() === project.title.trim().toLowerCase()
+    );
     const op = index >= 0 ? 'update' : 'create';
     if (index >= 0) {
-      this.projects[index] = project;
+      this.projects[index] = { ...this.projects[index], ...project, id: this.projects[index].id };
     } else {
       this.projects.push(project);
       this.addXP(30, 'Created new project');
@@ -567,10 +621,17 @@ class StudyOSStorage {
   }
 
   public saveTask(task: Task): void {
-    const index = this.tasks.findIndex((t) => t.id === task.id);
+    const targetUuid = toValidUuid(task.id);
+    const index = this.tasks.findIndex(
+      (t) =>
+        t.id === task.id ||
+        toValidUuid(t.id) === targetUuid ||
+        (t.title.trim().toLowerCase() === task.title.trim().toLowerCase() &&
+          t.category === task.category)
+    );
     const op = index >= 0 ? 'update' : 'create';
     if (index >= 0) {
-      this.tasks[index] = task;
+      this.tasks[index] = { ...this.tasks[index], ...task, id: this.tasks[index].id };
     } else {
       this.tasks.push(task);
     }

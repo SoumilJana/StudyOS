@@ -11,6 +11,8 @@ import {
   ArrowRight,
   X,
   Check,
+  Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import { useStudyOS } from '../context/StudyOSContext';
 import { storage } from '../services/storage';
@@ -23,6 +25,8 @@ export const DeadlinePlannerView: React.FC = () => {
   const [selectedDeadline, setSelectedDeadline] = useState<Deadline | null>(deadlines[0] || null);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null);
+  const [isRecalculating, setIsRecalculating] = useState<boolean>(false);
+  const [recalculateFeedback, setRecalculateFeedback] = useState<string | null>(null);
 
   // New Deadline Form State
   const [newTitle, setNewTitle] = useState('');
@@ -31,6 +35,20 @@ export const DeadlinePlannerView: React.FC = () => {
   const [newPriority, setNewPriority] = useState<PriorityLevel>('high');
   const [newHours, setNewHours] = useState(20);
   const [newSubjectId, setNewSubjectId] = useState<string>(subjects[0]?.id || '');
+
+  // Keep selected deadline in sync when deadlines change (deduplication, additions, or removals)
+  useEffect(() => {
+    if (deadlines.length > 0) {
+      if (!selectedDeadline || !deadlines.some((d) => d.id === selectedDeadline.id)) {
+        setSelectedDeadline(deadlines[0]);
+      } else {
+        const matching = deadlines.find((d) => d.id === selectedDeadline.id);
+        if (matching) setSelectedDeadline(matching);
+      }
+    } else {
+      setSelectedDeadline(null);
+    }
+  }, [deadlines]);
 
   // Live countdown timer for selected deadline
   useEffect(() => {
@@ -54,16 +72,48 @@ export const DeadlinePlannerView: React.FC = () => {
     return () => clearInterval(interval);
   }, [selectedDeadline]);
 
-  const handleGenerateBackwardPlan = () => {
+  const handleGenerateBackwardPlan = async () => {
     if (!selectedDeadline) return;
+    setIsRecalculating(true);
+    setRecalculateFeedback(null);
+
+    // Provide smooth tactical feedback
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
     const plan = aiService.generateBackwardPlan(
       selectedDeadline.title,
       selectedDeadline.dueDate,
       selectedDeadline.estimatedWorkloadHours
     );
-    selectedDeadline.backwardPlan = plan;
-    storage.saveDeadline(selectedDeadline);
-    setSelectedDeadline({ ...selectedDeadline });
+
+    // Keep completed flags if already completed
+    const updatedPlan = plan.map((step, idx) => {
+      const prevStep = selectedDeadline.backwardPlan?.[idx];
+      return {
+        ...step,
+        completed: prevStep ? prevStep.completed : false,
+      };
+    });
+
+    const updated = {
+      ...selectedDeadline,
+      backwardPlan: updatedPlan,
+    };
+
+    storage.saveDeadline(updated);
+    setSelectedDeadline(updated);
+    setIsRecalculating(false);
+    setRecalculateFeedback(
+      `✓ Schedule recalibrated: ${updatedPlan.length} milestones dynamically distributed across remaining days.`
+    );
+
+    setTimeout(() => {
+      setRecalculateFeedback(null);
+    }, 4500);
+  };
+
+  const handleDeleteDeadline = (id: string) => {
+    storage.deleteDeadline(id);
   };
 
   const handleTogglePlanStep = (index: number) => {
@@ -154,13 +204,25 @@ export const DeadlinePlannerView: React.FC = () => {
                       <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono font-bold uppercase text-slate-400">
                         {d.category}
                       </span>
-                      <span
-                        className={`text-xs font-bold font-mono ${
-                          diffDays <= 7 ? 'text-rose-400' : 'text-slate-300'
-                        }`}
-                      >
-                        {diffDays > 0 ? `${diffDays} days left` : 'Today!'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs font-bold font-mono ${
+                            diffDays <= 7 ? 'text-rose-400' : 'text-slate-300'
+                          }`}
+                        >
+                          {diffDays > 0 ? `${diffDays} days left` : 'Today!'}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteDeadline(d.id);
+                          }}
+                          title="Delete deliverable"
+                          className="rounded p-1 text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
 
                     <h3 className="mt-2 text-sm font-bold text-white truncate">{d.title}</h3>
@@ -185,9 +247,19 @@ export const DeadlinePlannerView: React.FC = () => {
                   <span className="rounded-full bg-indigo-500/20 px-3 py-1 text-[11px] font-mono font-bold uppercase text-indigo-300">
                     Countdown Ticker
                   </span>
-                  <span className="text-xs text-slate-400">
-                    Target: {new Date(selectedDeadline.dueDate).toLocaleDateString()}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400">
+                      Target: {new Date(selectedDeadline.dueDate).toLocaleDateString()}
+                    </span>
+                    <button
+                      onClick={() => handleDeleteDeadline(selectedDeadline.id)}
+                      title="Delete this deadline"
+                      className="flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[11px] font-medium text-rose-300 hover:bg-rose-500/20 transition-colors"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
                 </div>
 
                 <h2 className="mt-3 text-lg sm:text-xl font-bold text-white">
@@ -230,12 +302,32 @@ export const DeadlinePlannerView: React.FC = () => {
 
                   <button
                     onClick={handleGenerateBackwardPlan}
-                    className="flex items-center gap-1.5 self-start rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20"
+                    disabled={isRecalculating}
+                    className="flex items-center gap-1.5 self-start rounded-xl border border-indigo-500/40 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/20 disabled:opacity-50 transition-all"
                   >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    <span>Recalculate Schedule</span>
+                    {isRecalculating ? (
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin text-indigo-400" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                    )}
+                    <span>{isRecalculating ? 'Recalibrating...' : 'Recalculate Schedule'}</span>
                   </button>
                 </div>
+
+                {recalculateFeedback && (
+                  <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-300 animate-in fade-in slide-in-from-top-1">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                      <span>{recalculateFeedback}</span>
+                    </div>
+                    <button
+                      onClick={() => setRecalculateFeedback(null)}
+                      className="text-emerald-400/70 hover:text-emerald-200"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
 
                 {/* Steps List */}
                 <div className="space-y-3">

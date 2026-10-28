@@ -28,6 +28,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
 
     try {
       if (isSignUp) {
+        const redirectUrl =
+          typeof window !== 'undefined' && window.location.origin
+            ? `${window.location.origin}/`
+            : 'https://study-os-app.vercel.app/';
+
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -35,19 +40,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             data: {
               full_name: fullName || 'Scholar',
             },
+            emailRedirectTo: redirectUrl,
           },
         });
 
         if (error) throw error;
 
         if (data.user) {
-          setSuccessMessage('Account created successfully! You are now logged in.');
-          storage.updateSettings({ userName: fullName || email.split('@')[0] });
-          storage.addXP(100, 'Created Study OS Cloud Account');
-          setTimeout(() => {
-            onSuccess(data.user);
-            onClose();
-          }, 1200);
+          if (!data.session) {
+            setSuccessMessage(
+              `Confirmation email sent to ${email}! Please check your inbox and click the verification link. It will automatically redirect right back to Study OS.`
+            );
+          } else {
+            setSuccessMessage('Account created successfully! You are now logged in.');
+            storage.updateSettings({ userName: fullName || email.split('@')[0] });
+            storage.addXP(100, 'Created Study OS Cloud Account');
+            setTimeout(() => {
+              onSuccess(data.user);
+              onClose();
+            }, 1200);
+          }
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({

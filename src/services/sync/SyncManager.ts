@@ -8,7 +8,7 @@ import {
   RemoteChange,
 } from './types';
 import { CloudSyncAdapter } from './SyncAdapter';
-import { SupabaseSyncAdapter } from './SupabaseSyncAdapter';
+import { SupabaseSyncAdapter, toValidUuid } from './SupabaseSyncAdapter';
 import { supabase } from '../supabaseClient';
 import { storage } from '../storage';
 import { Deadline, Task, Project } from '../../types';
@@ -237,7 +237,19 @@ class SyncManager {
       this.notify();
       return { success: false, appliedCount: 0 };
     }
+
+    // Verify authenticated session before sending mutations to RLS tables
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session?.user) {
+      this.state = 'idle';
+      this.notify();
+      return { success: false, appliedCount: 0 };
+    }
+
     if (this.queue.length === 0) {
+      this.state = 'synced';
+      this.lastError = null;
+      this.notify();
       return { success: true, appliedCount: 0 };
     }
 
@@ -255,16 +267,24 @@ class SyncManager {
       // Handle failures
       result.failedMutations.forEach((f) => {
         const item = this.queue.find((m) => m.id === f.id);
-        if (item) item.retryCount += 1;
+        if (item) {
+          item.retryCount += 1;
+          // If a mutation failed >= 3 times, drop it so it does not permanently poison outbox
+          if (item.retryCount >= 3) {
+            console.warn(`[SyncManager] Discarding unresolvable mutation ${item.id} after 3 attempts:`, f.error);
+            this.queue = this.queue.filter((m) => m.id !== item.id);
+          }
+        }
       });
 
       this.persistQueue();
 
       this.lastSyncedAt = new Date().toLocaleTimeString();
       this.state = this.queue.length > 0 ? 'error' : 'synced';
-      this.lastError = result.failedMutations.length > 0
-        ? `${result.failedMutations.length} mutations failed to sync.`
-        : null;
+      this.lastError =
+        this.queue.length > 0 && result.failedMutations.length > 0
+          ? `${result.failedMutations.length} mutations failed to sync.`
+          : null;
 
       this.notify();
       return { success: result.failedMutations.length === 0, appliedCount: result.appliedMutationIds.length };
@@ -302,8 +322,12 @@ class SyncManager {
             backwardPlan: cd.backward_plan || [],
             createdAt: cd.created_at || new Date().toISOString(),
           };
-          // Don't overwrite if client has pending outbox mutation for this id
-          const isPending = this.queue.some((m) => m.entityType === 'deadline' && m.entityId === dl.id);
+          // Don't overwrite if client has pending outbox mutation for this id or UUID
+          const isPending = this.queue.some(
+            (m) =>
+              m.entityType === 'deadline' &&
+              (m.entityId === dl.id || toValidUuid(m.entityId) === dl.id)
+          );
           if (!isPending || this.conflictPolicy === 'server_wins') {
             storage.saveDeadline(dl);
           }
@@ -328,7 +352,11 @@ class SyncManager {
             subtasks: ct.subtasks || [],
             createdAt: ct.created_at || new Date().toISOString(),
           };
-          const isPending = this.queue.some((m) => m.entityType === 'task' && m.entityId === t.id);
+          const isPending = this.queue.some(
+            (m) =>
+              m.entityType === 'task' &&
+              (m.entityId === t.id || toValidUuid(m.entityId) === t.id)
+          );
           if (!isPending || this.conflictPolicy === 'server_wins') {
             storage.saveTask(t);
           }
@@ -352,7 +380,11 @@ class SyncManager {
             tags: cp.tags || [],
             createdAt: cp.created_at || new Date().toISOString(),
           };
-          const isPending = this.queue.some((m) => m.entityType === 'project' && m.entityId === p.id);
+          const isPending = this.queue.some(
+            (m) =>
+              m.entityType === 'project' &&
+              (m.entityId === p.id || toValidUuid(m.entityId) === p.id)
+          );
           if (!isPending || this.conflictPolicy === 'server_wins') {
             storage.saveProject(p);
           }
