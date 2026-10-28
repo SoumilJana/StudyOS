@@ -9,6 +9,8 @@ import {
 } from '../types';
 import { invokeAIProxy } from './supabaseClient';
 import { storage } from './storage';
+import { extractTopicContext } from './topicExtractor';
+import { synthesizeMaterialLesson, STAGE_TITLES } from './materialTeachingSynthesizer';
 
 export interface TutoringResponse {
   stage: number;
@@ -157,7 +159,7 @@ class AIService {
   }
 
   /**
-   * Explain a chapter topic across the 12-step cognitive learning workflow
+   * Explain a chapter topic across the cognitive learning workflow grounded in course material
    */
   public async explainChapterTopic(
     chapterTitle: string,
@@ -171,17 +173,43 @@ class AIService {
     const apiKey = currentSettings.apiKey?.trim();
     const activeModel = currentSettings.aiModel || 'google/gemma-4-31b-it:free';
 
-    const prompt = `You are an elite cognitive tutor in Study OS.
+    const stageIdx = Math.abs(stepIndex) % STAGE_TITLES.length;
+    const stageTitle = STAGE_TITLES[stageIdx];
+
+    // Intelligently extract targeted topic context from reference document
+    const extraction = referenceDocumentText
+      ? extractTopicContext(referenceDocumentText, topicTitle, chapterTitle, 5000)
+      : { context: '', hasExactMatch: false, matchScore: 0, matchedKeywords: [] };
+
+    const targetedContext = extraction.context;
+
+    const prompt = `You are an elite professor and interactive cognitive tutor in Study OS.
 Teach topic: "${topicTitle}" in Chapter: "${chapterTitle}".
-Stage ${stepIndex + 1} of 12.
-Reference Material Context:
+Stage: "${stageTitle}" (Stage ${stageIdx + 1} of ${STAGE_TITLES.length}).
+
+${
+  targetedContext
+    ? `COURSE REFERENCE MATERIAL (Extracted from student's syllabus/notes):
 """
-${referenceDocumentText ? referenceDocumentText.slice(0, 3000) : 'None provided'}
-"""
+${targetedContext}
+"""`
+    : 'No custom document provided. Ground in formal academic curriculum for this subject.'
+}
+
+TEACHING INSTRUCTIONS:
+1. STRICTLY GROUND YOUR LESSON in the facts, mechanisms, definitions, formulas, and terminology from the provided reference material.
+2. Structure the explanation with clear Markdown:
+   - Foundational Mental Model & Intuition (with practical real-world analogy)
+   - Step-by-Step Architecture of how it works
+   - Format comparisons or phases as clean Markdown tables with header rows
+   - Common Misconceptions & High-Yield Exam Pitfalls
+3. Extract 2-4 actual terms or formulas from the reference material into "keyFormulasOrDefinitions".
+4. Active Recall Question: Create a high-quality conceptual MCQ testing this exact topic with 4 realistic options, the correct answer index (0-3), and an explanation.
+5. Exam Tip: Practical advice on how this topic appears in university exams or technical interviews.
 
 Respond with a single JSON object containing:
-- stageTitle: string
-- explanation: comprehensive markdown explanation grounded in reference material
+- stageTitle: string ("${stageTitle}")
+- explanation: comprehensive markdown explanation
 - keyFormulasOrDefinitions: string array
 - retrievalQuestion: { prompt: string, options: [string, string, string, string], correctIndex: number, explanation: string }
 - examTip: string
@@ -189,15 +217,19 @@ Respond with a single JSON object containing:
 
     // 1. Direct User Key Execution (Prioritized for zero rate-limiting)
     if (apiKey) {
-      if (provider === 'openrouter') {
-        const res = await this.callDirectOpenRouter(prompt, apiKey, activeModel);
-        if (res && res.explanation) return { ...res, stage: stepIndex + 1, modelUsed: `${activeModel} (Personal Key)` };
-      } else if (provider === 'gemini') {
-        const res = await this.callGeminiAPI(prompt, apiKey, activeModel);
-        if (res && res.explanation) return { ...res, stage: stepIndex + 1, modelUsed: `Gemini (${activeModel})` };
-      } else if (provider === 'openai' || provider === 'custom') {
-        const res = await this.callDirectOpenAICompatible(prompt, apiKey, activeModel, currentSettings.customEndpoint);
-        if (res && res.explanation) return { ...res, stage: stepIndex + 1, modelUsed: `${activeModel} (Direct)` };
+      try {
+        if (provider === 'openrouter') {
+          const res = await this.callDirectOpenRouter(prompt, apiKey, activeModel);
+          if (res && res.explanation) return { ...res, stage: stageIdx + 1, modelUsed: `${activeModel} (Personal Key)` };
+        } else if (provider === 'gemini') {
+          const res = await this.callGeminiAPI(prompt, apiKey, activeModel);
+          if (res && res.explanation) return { ...res, stage: stageIdx + 1, modelUsed: `Gemini (${activeModel})` };
+        } else if (provider === 'openai' || provider === 'custom') {
+          const res = await this.callDirectOpenAICompatible(prompt, apiKey, activeModel, currentSettings.customEndpoint);
+          if (res && res.explanation) return { ...res, stage: stageIdx + 1, modelUsed: `${activeModel} (Direct)` };
+        }
+      } catch (err) {
+        console.warn('Direct LLM tutoring failed, attempting proxy or material synthesizer:', err);
       }
     }
 
@@ -209,98 +241,48 @@ Respond with a single JSON object containing:
           {
             chapterTitle,
             topicTitle,
-            stepIndex,
-            referenceContext: referenceDocumentText?.slice(0, 2000),
+            stepIndex: stageIdx,
+            referenceContext: targetedContext ? targetedContext.slice(0, 3000) : undefined,
           },
           activeModel
         );
 
         if (serverResult.data && serverResult.data.explanation) {
           return {
-            stage: stepIndex + 1,
-            stageTitle: serverResult.data.stageTitle || `Learning Stage ${stepIndex + 1}`,
+            stage: stageIdx + 1,
+            stageTitle: serverResult.data.stageTitle || stageTitle,
             explanation: serverResult.data.explanation,
             keyFormulasOrDefinitions: Array.isArray(serverResult.data.keyFormulasOrDefinitions)
               ? serverResult.data.keyFormulasOrDefinitions
               : [],
             retrievalQuestion: serverResult.data.retrievalQuestion || {
               prompt: `What is the core takeaway of ${topicTitle}?`,
-              options: ['Maintains system invariants', 'Reduces physical memory', 'Increases uncommitted writes', 'None of the above'],
+              options: [
+                `Core mechanism and boundary conditions of ${topicTitle}`,
+                'Unverified client-side validation',
+                'Unconstrained execution without monitoring',
+                'None of the above',
+              ],
               correctIndex: 0,
-              explanation: 'Verified through domain protocol rules.',
+              explanation: `Grounded in ${chapterTitle} curriculum.`,
             },
-            examTip: serverResult.data.examTip || 'Pay attention to invariant proofs.',
+            examTip: serverResult.data.examTip || 'Focus on how the mechanism is verified in practice.',
             modelUsed: serverResult.cached ? 'OpenRouter (Cached)' : `${activeModel} (Free Tier)`,
           };
         } else if (serverResult.isQuotaExhausted) {
           storage.createNotification({
             title: 'Free AI Quota Busy',
-            message: 'OpenRouter free-tier is experiencing peak traffic. Falling back to offline cognitive engine.',
+            message: 'OpenRouter free-tier is experiencing peak traffic. Falling back to material-grounded cognitive engine.',
             category: 'system',
           });
         }
       } catch (err) {
-        console.warn('AI proxy unavailable, using local heuristic:', err);
+        console.warn('AI proxy unavailable, using material cognitive synthesizer:', err);
       }
     }
 
-    // 3. Resilient High-Fidelity Local Offline Cognitive Heuristic Engine
-    const stepTitles = [
-      'Foundational Mental Model & Intuition',
-      'Core Mechanics & Step-by-Step Breakdown',
-      'Rigorous Mathematical/Technical Derivations',
-      'Common Misconceptions & High-Yield Exam Traps',
-      'Real-World Edge Cases & System Failure Modes',
-      'Synthesis & Active Recall Checkpoint',
-      'Security Invariants & Attack Vectors',
-      'Protocol Handshakes & Verification',
-      'Defensive Hardening & Mitigation Rules',
-      'Implementation Code Walkthrough',
-      'Past Exam Multi-Part Question Breakdown',
-      'Mastery Synthesis & Retrospective',
-    ];
-
-    const currentTitle = stepTitles[stepIndex % stepTitles.length];
-
-    return {
-      stage: stepIndex + 1,
-      stageTitle: currentTitle,
-      explanation: `### ${topicTitle} — ${currentTitle}
-
-In studying **${chapterTitle}**, mastering **${topicTitle}** requires moving beyond passive reading into active cognitive modeling.
-
-${referenceDocumentText ? `> **Grounded from Uploaded Source**: "${referenceDocumentText.slice(0, 240)}..."\n\n` : ''}
-
-#### Key Principles
-1. **First-Principles Derivation**: Every invariant exists to solve a specific failure condition. When entities interact over an untrusted or asynchronous medium, assumptions about order and timing break down.
-2. **State Machine Invariants**: A system must never commit state transitions without verifying preconditions and authorization bounds.
-3. **Defense-in-Depth**: Relying on a single perimeter control invariably results in compromise when that layer experiences an edge-case bypass.
-
-#### High-Yield Exam Insights
-- When asked to analyze vulnerabilities or edge cases in **${topicTitle}**, immediately identify:
-  - What inputs are attacker-controlled?
-  - Where is validation performed (client vs. server)?
-  - What happens when timeouts, race conditions, or partial failures occur?`,
-      keyFormulasOrDefinitions: [
-        `Invariant(${topicTitle}): Pre-conditions must be validated before state mutations`,
-        `Safety Check: Quorum size Q > N / 2 to prevent split-brain`,
-        `Complexity: O(log N) verification with authenticated data structures`,
-      ],
-      retrievalQuestion: {
-        prompt: `Which condition is essential to prevent state inconsistency during ${topicTitle}?`,
-        options: [
-          'Enforcing monotonic sequence numbering and quorum consensus prior to commit',
-          'Relying strictly on unsynchronized client clock timestamps',
-          'Permitting unchecked async writes to maximize pipeline throughput',
-          'Bypassing server validation when under high latency pressure',
-        ],
-        correctIndex: 0,
-        explanation: 'Monotonic sequence numbering and consensus ensure that all replicas agree on transition order.',
-      },
-      examTip: `Always state the trade-off (e.g. latency vs. strong consistency) when answering multi-mark questions on ${topicTitle}.`,
-      sourceCitation: referenceDocumentText ? 'Uploaded Material Context' : `${chapterTitle} — Study OS Heuristic Curriculum`,
-      modelUsed: 'Local Cognitive Engine (Offline)',
-    };
+    // 3. Resilient Material-Grounded Heuristic Synthesizer (Zero Generic Hallucinations)
+    return synthesizeMaterialLesson(chapterTitle, topicTitle, stepIndex, referenceDocumentText);
   }
 
   /**

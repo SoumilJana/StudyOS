@@ -538,3 +538,19 @@ export interface UserSettings {
     weeklyTrends: boolean;
   };
 }
+
+export interface TutoringResponse {
+  stage: number;
+  stageTitle: string;
+  explanation: string;
+  keyFormulasOrDefinitions: string[];
+  retrievalQuestion: {
+    prompt: string;
+    options: string[];
+    correctIndex: number;
+    explanation: string;
+  };
+  examTip: string;
+  sourceCitation?: string;
+  modelUsed?: string;
+}

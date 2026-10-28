@@ -67,6 +67,27 @@ export const LearningStudioView: React.FC = () => {
     }
   }, []);
 
+  const selectedSubject = subjects.find((s) => s.id === selectedSubjectId);
+  const subjectResources = resources.filter(
+    (r) =>
+      (selectedSubject && r.subjectId === selectedSubject.id) ||
+      (selectedSubject && r.title.toLowerCase().includes(selectedSubject.name.toLowerCase())) ||
+      (selectedSubject?.code && r.title.toLowerCase().includes(selectedSubject.code.toLowerCase()))
+  );
+
+  // Auto-ground on course syllabus/materials from Resource Library if not already grounded
+  useEffect(() => {
+    if (!groundingText && subjectResources.length > 0) {
+      const primaryRes = subjectResources[0];
+      if (primaryRes.extractedText) {
+        setGroundingText(primaryRes.extractedText);
+        setUploadedFileName(primaryRes.title);
+        sessionStorage.setItem('study_os_active_grounding_text', primaryRes.extractedText);
+        sessionStorage.setItem('study_os_active_grounding_title', primaryRes.title);
+      }
+    }
+  }, [selectedSubjectId, groundingText, subjectResources]);
+
   const handleFileUpload = async (fileInput: FileList | File[] | File) => {
     const rawFiles = fileInput instanceof File ? [fileInput] : Array.from(fileInput);
     if (rawFiles.length === 0) return;
@@ -135,8 +156,6 @@ export const LearningStudioView: React.FC = () => {
       handleTeachStep(currentStepIndex, undefined);
     }
   };
-
-  const selectedSubject = subjects.find((s) => s.id === selectedSubjectId);
 
   // Find selected chapter and topic
   let currentChapter: any = null;
@@ -217,7 +236,12 @@ export const LearningStudioView: React.FC = () => {
   const handleGenerateCards = async () => {
     if (!requireAuth('generate and save flashcards to the database')) return;
     if (!selectedSubject || !currentTopic) return;
-    const cards = await aiService.generateFlashcards(selectedSubject.name, currentTopic.title, 3);
+    const cards = await aiService.generateFlashcards(
+      selectedSubject.name,
+      currentTopic.title,
+      3,
+      groundingText || undefined
+    );
     cards.forEach((c) => {
       storage.saveFlashcard({
         ...c,
@@ -235,7 +259,13 @@ export const LearningStudioView: React.FC = () => {
   const handleGenerateQuestions = async () => {
     if (!requireAuth('generate and save questions to the database')) return;
     if (!selectedSubject || !currentTopic) return;
-    const questions = await aiService.generateQuestions(selectedSubject.name, currentTopic.title, 3);
+    const questions = await aiService.generateQuestions(
+      selectedSubject.name,
+      currentTopic.title,
+      3,
+      3,
+      groundingText || undefined
+    );
     questions.forEach((q) => {
       storage.saveQuestion({
         ...q,
@@ -328,14 +358,54 @@ export const LearningStudioView: React.FC = () => {
             </div>
 
             {uploadedFileName ? (
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-1.5">
-                <div className="flex items-center gap-2 text-emerald-300 text-xs font-bold">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{uploadedFileName}</span>
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-emerald-300 text-xs font-bold truncate">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                    <span className="truncate">{uploadedFileName}</span>
+                  </div>
+                  <button
+                    onClick={handleClearGrounding}
+                    className="text-[10px] text-rose-400 hover:text-rose-300 font-medium flex items-center gap-0.5 ml-2 shrink-0"
+                    title="Detach grounding document"
+                  >
+                    <X className="h-3 w-3" />
+                    <span>Clear</span>
+                  </button>
                 </div>
                 <p className="text-[10px] text-slate-300 leading-tight">
-                  Tutor explanations and active recall questions are strictly grounded in this source document.
+                  ✓ Active tutor explanations, formulas, and recall questions are strictly extracted and taught from this course material.
                 </p>
+
+                {subjectResources.length > 1 && (
+                  <div className="pt-1.5 border-t border-emerald-500/20">
+                    <label className="text-[9px] font-semibold text-emerald-400 uppercase tracking-wider block mb-1">
+                      Switch Course Material:
+                    </label>
+                    <select
+                      onChange={(e) => {
+                        const res = resources.find((r) => r.id === e.target.value);
+                        if (res) {
+                          setGroundingText(res.extractedText || '');
+                          setUploadedFileName(res.title);
+                          sessionStorage.setItem('study_os_active_grounding_text', res.extractedText || '');
+                          sessionStorage.setItem('study_os_active_grounding_title', res.title);
+                          if (currentTopic && currentChapter) {
+                            handleTeachStep(currentStepIndex, res.extractedText);
+                          }
+                        }
+                      }}
+                      value={resources.find((r) => r.title === uploadedFileName)?.id || ''}
+                      className="w-full rounded-lg border border-emerald-500/40 bg-slate-950 px-2 py-1 text-[11px] text-slate-200"
+                    >
+                      {subjectResources.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             ) : isParsingDoc ? (
               <div className="flex flex-col items-center justify-center rounded-xl border border-slate-800 bg-slate-950/60 p-4 text-center">

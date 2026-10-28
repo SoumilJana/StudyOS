@@ -63,4 +63,32 @@ describe('AI Service Layer & Backward Planning Engine', () => {
     expect(questions[0].negativeMarks).toBeDefined();
     expect(questions[0].explanation).toBeDefined();
   });
+
+  it('teaches topics specifically from provided course material rather than generic templates', async () => {
+    const hackingMaterial = `
+=== CHAPTER 3: SYSTEM HACKING & PASSWORD CRACKING ===
+Password cracking techniques include dictionary attacks, brute-force attacks, and rainbow tables.
+Salting passwords with random nonces prevents rainbow table pre-computation attacks.
+Horizontal privilege escalation occurs when an attacker accesses accounts with equal privileges,
+whereas vertical privilege escalation elevates standard user access to root or SYSTEM administrative privileges.
+    `;
+
+    const lesson = await aiService.explainChapterTopic(
+      'System Hacking',
+      'Password Cracking',
+      1,
+      undefined,
+      hackingMaterial
+    );
+
+    expect(lesson.stageTitle).toBe('Core Mechanics & Step-by-Step Architecture');
+    expect(lesson.explanation).toContain('Password Cracking');
+    // Verifies that it teaches from the actual material
+    expect(lesson.explanation.toLowerCase()).toMatch(/password cracking|privilege escalation|rainbow/);
+    expect(lesson.retrievalQuestion).toBeDefined();
+    expect(lesson.retrievalQuestion.prompt).toContain('Password Cracking');
+    // Ensure it does not output distributed consensus quorum invariants for a security topic
+    expect(lesson.explanation).not.toContain('Quorum size Q > N / 2');
+    expect(lesson.retrievalQuestion.prompt).not.toContain('state inconsistency');
+  });
 });
